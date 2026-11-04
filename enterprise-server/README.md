@@ -212,4 +212,4 @@ App Secret 使用 DATA_KEY 对称加密后保存到数据库，不回显、不�
 
 该同步是管理员手动触发，不是实时事件订阅。单次最多 500 个部门、10000 位员工，拉取截止时间约 2 分钟；规模较大时应缩小根部门范围。真实企业凭证尚未配置时不能声称已完成真实通讯录联调。
 
-新增管理员接口：GET/PUT /api/feishu/config、POST /api/feishu/check、POST /api/feishu/sync。GET 和 bootstrap 只返回脱敏配置与状态。当前共 31 项测试通过，新增覆盖配置加密、动态生效、分页去重、授权保留、离职和可见范围撤权、失败原子性及管理员隔离。
+新增管理员接口：GET/PUT /api/feishu/config、POST /api/feishu/check、POST /api/feishu/sync。GET 和 bootstrap 只返回脱敏配置与状态。当前共 32 项测试通过，新增覆盖配置加密、动态生效、分页去重、空末页省略 items 的兼容、授权保留、离职和可见范围撤权、失败原子性及管理员隔离。缺失分页结束标记或返回错误类型的 items 时仍中止整批同步。

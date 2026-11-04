@@ -134,6 +134,29 @@ test("paginated and multi-department sync deduplicates employees; new accounts r
   assert.equal(rows.find((e) => e.openId === "ou_a").departmentIds.length, 2);
   assert.ok(!JSON.stringify(rows).includes("not-to-store"));
 });
+test("empty final Feishu pages may omit items; malformed responses still abort without revoking employees", async (t) => {
+  const { db, directory } = await setup(t);
+  const upstream = directory.fetcher;
+  directory.fetcher = async (...args) => {
+    const response = await upstream(...args);
+    const body = await response.json();
+    if (body.data?.items?.length === 0) delete body.data.items;
+    return new Response(JSON.stringify(body));
+  };
+  const result = await directory.sync("test");
+  assert.equal(result.employees, 2);
+  assert.equal(result.departments, 3);
+  const before = await db.list("employees");
+  const tokenResponse = () => new Response(JSON.stringify({code: 0, tenant_access_token: "test-only-tenant-token"}));
+  for (const malformed of [{}, { has_more: true }, { has_more: false, items: null }, { has_more: false, items: {} }]) {
+    directory.fetcher = async (url) => url.includes("tenant_access_token/internal")
+      ? tokenResponse()
+      : ok(malformed);
+    await assert.rejects(directory.sync("test"), /响应不完整/);
+    assert.deepEqual(await db.list("employees"), before);
+    assert.equal(await db.get("integrationLocks", "feishu"), null);
+  }
+});
 test("existing grants and employee identity are preserved; explicit departure revokes devices and sessions", async (t) => {
   const { db, service, directory, setMode } = await setup(t);
   const pool = await service.pool(

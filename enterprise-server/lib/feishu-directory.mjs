@@ -162,9 +162,14 @@ export class FeishuDirectory {
         ...(next ? { page_token: next } : {}),
       });
       const data = (await this.call(path + "?" + q, token)).data;
-      if (!data || !Array.isArray(data.items))
+      // Feishu omits items for an empty final page. Require its explicit end
+      // marker so malformed responses cannot masquerade as an empty directory.
+      const items = data?.items === undefined && data?.has_more === false
+        ? []
+        : data?.items;
+      if (!data || !Array.isArray(items))
         fail("飞书通讯录响应不完整；本次同步未写入", 502);
-      result.push(...data.items);
+      result.push(...items);
       if (result.length > 10000)
         fail("单次同步数据过多，请按部门缩小范围", 400);
       if (!data.has_more) return result;

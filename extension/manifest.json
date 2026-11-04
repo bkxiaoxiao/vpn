@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "节点订阅助手",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmyJSJnrFjq19uWV/Y1IFPvXWrHG1qyOeaH/ivE4NjFaZkKmgETic+gBQr/yFsMiULOdZ+6XZ/MGqA5h5EQpwSs/iOOrf9sVNQ+029a0PB7fnvrSF1syZeBJaCRvkuvvlujneDx1SfvD+eWO8hC9wv0kv2m/U6aeIs/Oll6Jr6L92A8jJeTKtNJU9ouzUPzx0oBzLYWIpTy1ngRCDqXWjh+9Cbk/x+t8hBBYqfyJZOTVZbTJdEejWjx1jmryUJwkyqspqLR96BcOHr4RrL3fdGLWoX8f7TQlyU4ioS/Wj4HOHEE17ZNNipqxofWbVHqnRAuapgb3U2NQ4SNS6CuO5MQIDAQAB",
+  "description": "管理 Shadowsocks / VLESS 订阅，并通过本机 sing-box 为 Chrome 提供代理。",
+  "permissions": [
+    "alarms",
+    "proxy",
+    "storage",
+    "webRequest",
+    "webRequestAuthProvider"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "节点订阅助手"
+  },
+  "options_page": "options.html"
+}

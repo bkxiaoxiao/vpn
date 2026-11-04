@@ -1,0 +1,10 @@
+{
+  "name": "vpn-subscription-manager",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/subscriptions.test.mjs gateway/test/*.test.mjs && python3 -m unittest tests/test_host.py",
+    "check": "node --check extension/background.js && node --check extension/popup.js && node --check extension/options.js && node --check gateway/server.mjs && node --check gateway/lib/config.mjs && node --check gateway/lib/subscription-fetch.mjs && node --check gateway/lib/singbox.mjs && python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('native-host/host.py').read_text(encoding='utf-8'))\""
+  }
+}

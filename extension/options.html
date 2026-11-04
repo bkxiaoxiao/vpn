@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>订阅与设置</title>
+    <link rel="stylesheet" href="ui.css">
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="options-shell">
+      <header class="page-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <h1>订阅与设置</h1>
+            <p>节点订阅助手</p>
+          </div>
+        </div>
+        <button id="refreshAllButton" class="secondary" type="button">更新全部订阅</button>
+      </header>
+
+      <div class="content-grid">
+        <section class="main-column">
+          <article class="card settings-card">
+            <div class="card-title">
+              <div>
+                <h2>远程网关</h2>
+                <p>扩展通过控制 API 切换节点，并直接连接服务器上的 HTTPS 代理。</p>
+              </div>
+            </div>
+            <form id="gatewayForm" class="gateway-form">
+              <div class="field gateway-url-field">
+                <label for="gatewayUrl">控制 API 地址</label>
+                <input id="gatewayUrl" type="url" placeholder="https://proxy.example.com:8443" required>
+              </div>
+              <div class="field">
+                <label for="apiToken">API Token</label>
+                <input id="apiToken" type="password" autocomplete="off" required>
+              </div>
+              <div class="field">
+                <label for="proxyHost">HTTPS 代理域名</label>
+                <input id="proxyHost" placeholder="proxy.example.com" required>
+              </div>
+              <div class="field short-field">
+                <label for="proxyPort">端口</label>
+                <input id="proxyPort" type="number" min="1" max="65535" value="443" required>
+              </div>
+              <div class="field">
+                <label for="proxyUsername">代理用户名</label>
+                <input id="proxyUsername" autocomplete="username" required>
+              </div>
+              <div class="field">
+                <label for="proxyPassword">代理密码</label>
+                <input id="proxyPassword" type="password" autocomplete="current-password" required>
+              </div>
+              <button class="primary" type="submit">保存并检测</button>
+            </form>
+          </article>
+
+          <article class="card settings-card">
+            <div class="card-title">
+              <div>
+                <h2>添加订阅</h2>
+                <p>支持包含 ss://、vless:// 的纯文本或 Base64 订阅。</p>
+              </div>
+            </div>
+            <form id="subscriptionForm" class="subscription-form">
+              <div class="field">
+                <label for="subscriptionName">名称</label>
+                <input id="subscriptionName" name="name" maxlength="80" placeholder="例如：我的机场" required>
+              </div>
+              <div class="field url-field">
+                <label for="subscriptionUrl">订阅地址</label>
+                <input id="subscriptionUrl" name="url" type="url" placeholder="https://example.com/subscribe?..." required>
+              </div>
+              <button class="primary" type="submit">添加并更新</button>
+            </form>
+          </article>
+
+          <section class="subscriptions-section">
+            <div class="section-title">
+              <h2>我的订阅</h2>
+              <span id="subscriptionCount">0 个</span>
+            </div>
+            <div id="subscriptionList" class="subscription-list"></div>
+            <div id="emptyState" class="empty-state card">
+              <div class="empty-icon">↗</div>
+              <h3>还没有订阅</h3>
+              <p>在上方粘贴订阅地址，节点会自动出现在扩展弹窗中。</p>
+            </div>
+          </section>
+        </section>
+
+        <aside class="side-column">
+          <article class="card side-card">
+            <div class="card-title compact">
+              <div>
+                <h2>远程网关状态</h2>
+                <p>控制 API 与服务器 sing-box</p>
+              </div>
+              <span id="gatewayBadge" class="badge">检测中</span>
+            </div>
+            <dl class="status-list">
+              <div><dt>API</dt><dd id="apiStatus">—</dd></div>
+              <div><dt>代理核心</dt><dd id="runningStatus">—</dd></div>
+              <div><dt>当前节点</dt><dd id="remoteNodeStatus">—</dd></div>
+            </dl>
+            <p id="gatewayHint" class="hint">请先部署网关并填写连接信息。</p>
+            <button id="checkGatewayButton" class="secondary full" type="button">重新检测</button>
+          </article>
+
+          <article class="card side-card">
+            <div class="card-title compact">
+              <div>
+                <h2>自动更新</h2>
+                <p>定时获取最新节点</p>
+              </div>
+            </div>
+            <form id="settingsForm" class="stack-form">
+              <div class="field">
+                <label for="refreshHours">更新频率</label>
+                <select id="refreshHours">
+                  <option value="0">关闭自动更新</option>
+                  <option value="6">每 6 小时</option>
+                  <option value="12">每 12 小时</option>
+                  <option value="24">每天</option>
+                  <option value="48">每 2 天</option>
+                </select>
+              </div>
+              <button class="primary" type="submit">保存设置</button>
+            </form>
+          </article>
+        </aside>
+      </div>
+
+      <p id="message" class="message floating-message" role="status"></p>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

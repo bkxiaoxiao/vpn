@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>节点订阅助手</title>
+    <link rel="stylesheet" href="ui.css">
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header>
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <h1>节点订阅助手</h1>
+            <p>由远程 HTTPS 网关驱动</p>
+          </div>
+        </div>
+        <span id="statusBadge" class="badge">未连接</span>
+      </header>
+
+      <section class="connection-card card">
+        <div class="connection-orb" aria-hidden="true"><span></span></div>
+        <h2 id="connectionTitle">代理已关闭</h2>
+        <p id="connectionDetail">选择一个节点后即可连接</p>
+        <button id="toggleButton" class="primary" type="button">连接</button>
+      </section>
+
+      <section class="node-card card">
+        <div class="section-heading">
+          <label for="nodeSelect">当前节点</label>
+          <button id="refreshButton" class="text-button" type="button">更新订阅</button>
+        </div>
+        <select id="nodeSelect" aria-label="选择节点"></select>
+        <div class="node-meta">
+          <span id="protocolTag">—</span>
+          <span id="sourceText">尚无节点</span>
+        </div>
+      </section>
+
+      <p id="message" class="message" role="status"></p>
+
+      <footer>
+        <span id="nodeCount">0 个节点</span>
+        <button id="settingsButton" class="text-button" type="button">订阅与设置 →</button>
+      </footer>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,224 @@
+Karing 企业专属客户端：源码分析与实施建议
+分析日期：2026-11-04（Asia/Shanghai）
+仓库：https://github.com/KaringX/karing
+分析版本：main / 4faa4a0965097b637f900e5639512e5ed41ec3b8
+pubspec.yaml 声明：1.2.26+2919；Dart >=3.12.2 <4.0.0；Flutter >=3.44.0。
+范围：已下载源码并静态阅读；未修改上游业务代码，未运行客户端、未搭建或部署企业服务。
+
+已确认的项目范围
+  首批同时覆盖 Windows、macOS、Android、iOS。
+  已有 Clash / sing-box 订阅或节点，首期复用现有网络资源。
+  现有资源是否支持逐员工/设备凭证、轮换和吊销尚未确认。
+  建议由企业服务在服务端拉取现有订阅、规范化并按权限生成受管配置；上游订阅地址及密钥不嵌入客户端。
+  四个平台共享认证与策略协议，但分别验收浏览器回调、凭证安全存储、VPN 生命周期、签名安装和升级。
+  现有共享节点密码只能实现登录后分发配置，不能据此承诺单员工撤权；此项是接入现有节点时的必查能力。
+
+一、结论
+
+产品方向可行：保留 Karing 的跨平台客户端和代理能力，新增企业身份及配置控制服务。
+员工安装专属客户端 -> 飞书登录 -> 服务端校验企业和员工权限 -> 下发本人/设备配置 -> 一键连接。
+
+但当前下载版本不是自包含、可直接构建的完整工程，不能按“改 Logo、加登录页即可上线”估算。
+应先取得缺失源码/依赖并完成目标平台的原版构建，再投入企业功能改造。
+若无法恢复完整源码，应改用具有可复现构建流程的基础工程，或保留产品设计而重建客户端壳层。
+这里未调查其他基础工程，不据此对其他项目作成熟度或成本承诺。
+
+二、已核实的代码结构和复用边界
+
+1. Flutter UI 与原生 VPN 接入
+   lib/main.dart：启动、ABI 初始化、配置初始化、Sentry、单实例及平台检查。
+   lib/my_app.dart：应用与窗口/平台生命周期。
+   lib/screens/home_screen.dart：主页、连接状态与配置更新事件消费。
+   lib/app/modules/biz.dart：ServerManager.init、VPNService.init，以及启动/重启请求入口。
+   Android、Windows、macOS、iOS、Linux、tvOS 均有平台工程。
+   README 声明基于 KaringX 修改版 sing-box；平台工程存在不等于这些平台已在本机编译通过。
+
+2. 订阅和规则管理
+   lib/app/modules/server_manager.dart：配置分组、导入、远程订阅、重载、规则分流与测速管理。
+   重要入口：init、updateSubscription、loadFrom、addRemoteConfig、reload。
+   init 中：启动后延迟检查；VPN 连通后检查；恢复前台时检查；PC 每 30 分钟检查。
+   updateSubscription 按每组 updateDuration 判断是否需要更新，不等于实时下发，也不是固定 30 分钟更新所有订阅。
+   addRemoteConfig 可传 RemoteContent，经 loadFrom 调用 AutoConfUtils.tryConvert。
+   由于 AutoConfUtils、RemoteContent 所在工具源码缺失，不能确认全部格式转换和 HTTP Header 行为。
+   导入后如何与现有组、路由和运行配置衔接，须在源码补齐后联调；不能假设直接替换 sing-box JSON 即可完全生效。
+
+3. 已有登录不是企业 SSO
+   lib/screens/login_step_provider_screen.dart 与 board_provider_manager.dart 处理服务商面板绑定。
+   现有流程使用内嵌 WebView 并注入服务商绑定 JS；不能直接当作飞书 OAuth 实现。
+   建议独立企业认证模块，走系统浏览器与企业服务端授权流程。
+
+4. 深链接
+   lib/screens/scheme_handler.dart 处理安装配置、连接、断开、恢复备份等动作。
+   可以作为企业回调的结构参考，但企业回调应新增独立 action，不能把任意 URL 当成可信配置入口。
+   企业模式下关闭不必要的外部配置导入和远程恢复入口，服务端仍必须独立鉴权。
+
+5. RemoteConfig 并非员工配置中心
+   remote_config.dart、remote_config_manager.dart 负责上游应用远程参数、通知/升级等配置。
+   不应直接把这套公共远程配置改作员工身份授权系统。
+   必须审查并替换公共更新、通知、推广和遥测端点，避免企业客户端继续获取上游产品运营配置。
+   main.dart 会根据 disableAppImproveData 调用 SentryUtilsPrivate.init；私有实现未提供，当前无法审计完整遥测行为。
+
+三、构建阻碍与静态审计结果
+
+已扫描 155 个 Dart 文件。排除块注释与非 import/export 行后，发现 65 个唯一内部导入目标不存在。
+分布：app/utils 61 个，app/local_services 1 个，app/private 2 个，screens 1 个。
+示例：
+  app/local_services/vpn_service.dart
+  app/utils/auto_conf_utils.dart
+  app/utils/http_utils.dart
+  app/utils/singbox_config_builder.dart
+  app/utils/proxy_conf_utils.dart
+  app/private/sentry_utils_private.dart
+  app/private/app_url_utils_private.dart
+  screens/statistics_records_screen.dart
+
+这些缺失已通过本地文件检查及 HEAD 的 git tree 验证，不能仅靠 flutter pub get 恢复内部源码。
+另有以下依赖缺口：
+  pubspec.yaml 的 vpn_service dependency_override 指向 ../vpn-service，当前工作区没有该目录。
+  Apple 工程引用 bind/apple/Libbox.xcframework 和 bind/apple/LibVpnCore/LibVpnCore.swift。
+  Windows/Linux 工程依赖额外核心产物；不能把完整核心构建流程视为已包含。
+  Android Gradle 无条件读取工作区外 private_for_build/.../sentry.properties；关闭上传开关不会自动消除读取。
+  Android release/profile 使用上游签名配置，企业版本需要自己的签名和构建配置。
+  当前 shell PATH 未发现 flutter / dart；此次没有执行依赖安装、analyze、单元测试或打包。
+
+tools/audit_karing.py 可重复生成 karing-source-audit.json，列出全部缺失内部导入及抽样外部路径状态。
+该脚本只做静态结构检查，不等于 Dart 编译器或完整构建依赖审计。
+
+四、建议架构
+
+员工客户端（Flutter）
+  -> 企业控制服务（HTTPS API）
+       -> 飞书自建应用：登录身份、必要通讯录范围、离职/变更事件
+       -> 数据库：员工、设备、权限组、配置版本、会话、发布记录
+       -> 凭证适配器：生成/轮换/吊销代理节点上的员工或设备凭证
+       -> 管理后台：节点、部门策略、配置发布、禁用设备、回滚、审计
+  -> 代理节点/企业网络网关：真正承载流量并执行准入
+
+控制服务负责“谁可以拿什么配置”；代理节点负责“谁可以继续连”。两者必须联动。
+建议控制服务及飞书登录所需域名在未连接 VPN 时即可访问，避免首次登录依赖尚未拿到的配置。
+应用自己的 API 请求也要明确直连/代理行为，避免连错节点后无法拉取恢复配置。
+
+五、飞书登录的建议流程（设计，尚未实现）
+
+1. 客户端生成一次性 verifier 与 challenge，向企业服务创建短期登录事务。
+   这里的 challenge 用于绑定本客户端与企业服务的会话兑换；不预设飞书端是否支持 PKCE。
+2. 客户端打开系统浏览器，进入企业服务返回的登录地址，再跳转飞书授权页。
+3. 飞书只回调预先注册的企业 HTTPS 地址。服务端校验 state、时效、事务未消费，再兑换 code。
+4. 服务端调用飞书身份接口，校验指定 tenant_key、员工身份及授权范围；按需读取通讯录确认在职与部门。
+   不能只验证“飞书登录成功”；同名、相同邮箱后缀均不能代替企业/员工身份校验。
+5. 企业服务生成一次性短期交接票据，回传到专属客户端 scheme 或经授权轮询的事务。
+   客户端持 verifier 兑换企业会话。系统回调中不携带飞书 token、长期 token、订阅或节点密钥。
+6. 企业会话绑定用户、设备和权限版本；refresh token 存系统安全存储，服务端仅存其哈希并轮换。
+   飞书 App Secret、企业签名私钥、飞书访问令牌保留在服务端。
+   注销、禁用设备、员工离职都应撤销企业会话及代理凭证。
+
+飞书后台需配置：企业自建应用、可用范围、正式 HTTPS 回调、按需权限、事件订阅及发布。
+具体 scope 和字段以实施时飞书官方接口及企业授予范围为准，本次未调用真实飞书 API。
+
+六、配置同步设计
+
+建议新增 EnterpriseAuthManager、EnterpriseApi、EnterprisePolicyManager、ManagedProfileAdapter。
+这些是建议的新模块名，当前仓库不存在。
+
+服务端按用户/设备权限生成版本化配置包：
+  policy_id、revision、schema_version、generated_at、expires_at、minimum_client_version
+  允许的节点、路由/DNS 策略、管理锁定项、有效的个人/设备凭证、内容哈希与签名元数据。
+  验签需定义稳定序列化/原始字节格式、签名算法、key_id、密钥轮换与信任根。
+  签名防篡改不代替 TLS，也不能使客户端拿到的节点密钥不可提取。
+
+流程：
+  登录后立即同步；应用启动/恢复前台、连接前再次检查有效性；运行期间定期检查版本。
+  首期可设前台/桌面 5 分钟检查，退避与抖动防止集中请求；移动后台不承诺固定周期。
+  使用 ETag/If-None-Match 或独立版本接口减少下载；身份和授权检查先于返回 304。
+  下载 -> 验签/过期/兼容性检查 -> 解析及核心配置验证 -> 暂存 -> 应用 -> 运行健康检查 -> 确认版本。
+  下载成功、落盘成功、运行生效分别记录，失败保留上一份仍获授权且在有效期内的可用配置。
+  401 尝试一次受控刷新；403/撤权清理受管凭证并断开，不可当普通网络故障长期回退。
+  权限变更不能由旧客户端本地设置覆盖；拒绝过期策略及未经授权的版本回退。
+  管理员回滚应发布更高 revision、引用旧内容，避免与防重放策略冲突。
+
+建议企业配置由受管分组持有，使用稳定 group id；重登应更新同组，不能每次新增重复订阅。
+通过 ManagedProfileAdapter 对接 ServerManager 的导入/事件机制，并补齐实际运行配置应用链路。
+需要改造鉴权下载、缓存、错误处理，不能依赖 URL 中的永久 token。
+共享订阅 URL 和长期共享节点密码不适合要求个人撤权的企业版本。
+
+受管配置中的节点凭证应从备份、导出、分享、二维码、日志、崩溃报告中排除。
+原有 iCloud/WebDAV/ZIP 同步不作为企业配置权威来源，避免个人备份覆盖组织策略。
+UI 可限制员工修改受管配置，但设备所有者仍可能提取本地凭证；隔离依赖服务端逐设备授权和吊销。
+
+七、离职与网络准入
+
+收到飞书离职/授权范围变更事件：验签或验证连接来源、事件去重、关联内部员工、撤销会话与节点凭证。
+事件权限和范围需实测，辅以定期通讯录对账，不能只依赖事件一定送达。
+撤销节点凭证不一定自动中断已建立连接；需验证节点是否支持断开现有会话，否则限定会话寿命并定义撤权时限。
+如果现有节点只支持所有人共享密码，需要轮换密码或改造节点认证，不能承诺单员工立即断网。
+离线宽限期是组织策略：可用性与撤权时效有取舍，首期建议短期且明确到期后禁止新连接。
+客户端断开本身不等于阻止设备直连其他网络；若要求设备级强制访问控制，还需要系统策略/MDM及网关配合。
+如果目标是访问公司内网，还需要网关回程路由、内网 DNS、地址规划与服务 ACL；仅分发代理节点不足以完成内网接入。
+
+八、建议服务端 API（草案，非现有接口）
+
+POST /v1/auth/transactions             创建绑定 challenge 的浏览器登录事务
+GET  /v1/auth/feishu/start             开始授权
+GET  /v1/auth/feishu/callback          服务端接收授权码
+POST /v1/auth/exchange                 交接票据 + verifier 兑换企业会话
+POST /v1/auth/refresh                  轮换 refresh token
+POST /v1/auth/logout                   撤销当前会话；是否同时禁用设备由策略明确
+GET  /v1/me                            当前员工、权限与设备状态
+GET  /v1/policy                        鉴权后读取配置包，支持 ETag
+POST /v1/policy/ack                    上报下载/验证/运行生效状态，不含密钥
+POST /v1/events/feishu                 如采用 webhook：处理验证及通讯录事件
+
+最小数据表：users、devices、sessions、auth_transactions、policy_groups、group_memberships、
+policy_revisions、device_credentials、policy_assignments、audit_events。
+按 tenant_key + 应用范围内稳定用户标识映射；不可把不同应用的 open_id 当作全局相同 ID。
+节点凭证加密存储、分设备关联，管理员查看与导出也应有权限和审计。
+API 技术栈可按现有运维能力选，当前未擅自选定或部署。
+
+九、实施顺序和验收
+
+阶段 A：可构建性门槛
+  取得缺失源码与匹配版本的 vpn-service、核心构建方案；替换上游签名和私有构建依赖。
+  在首批目标平台构建原始功能，验证导入、连接、断开、重启、升级和失败恢复。
+  无法完成时先调整技术底座，不在不完整仓库上盲目堆叠企业功能。
+
+阶段 B：最小企业闭环
+  飞书登录 + 指定企业与员工校验 + 设备绑定 + 单组受管配置 + 手动/启动同步 + 一键连接。
+  实测从未连接 VPN 的新设备完成登录并连接；错误企业、被禁用员工必须被拒绝。
+
+阶段 C：管理和撤权
+  配置版本、自动同步、部门策略、设备限制、管理员发布和回滚、凭证撤销、离职联动。
+  验证旧缓存/导出配置失去准入；测量现有连接的实际断开时间。
+  断网、过期、403、签名错误、坏配置、服务重启和节点不可达均有明确恢复路径。
+
+阶段 D：分发与运行
+  企业名称、图标、独立包名、URL scheme、存储目录、VPN 扩展标识、更新源及签名。
+  检查 main.dart 的进程名、安装位置、内置版本一致性检查，避免只改安装包名字导致启动失败。
+  Apple 平台的签名、Network Extension 权限、App Group 和组织分发渠道需单独验证。
+  Windows 安装/权限与签名、Android VPN 授权及升级数据兼容均需真机验收。
+  未确认首批平台、现有服务端、节点协议和凭证管理能力前，不提供固定工期承诺。
+
+十、许可证与品牌
+
+LICENSE.md 写明 GPL v3 或更高版本，并附衍生作品未经许可不得使用原名称或暗示关联的条款。
+建议使用独立企业品牌，保留原版权与许可证说明，并审查实际打包的核心及依赖许可证。
+GNU FAQ 说明同一组织内部修改和使用通常不要求向社会公开源码；这不等于任意对外分发均可闭源。
+向外部组织/个人分发时需按适用许可证履行对应源码等义务，不能混同“私有服务”和“闭源客户端”。
+
+十一、待确认信息
+
+  已有资源的具体类型和管理面板；节点是否支持逐员工/设备凭证与吊销？
+  使用目标：统一海外出口、按应用分流、公司内网访问，是否要求设备级强制控制？
+  飞书：企业自建应用、可用范围、通讯录权限与事件订阅能否由管理员配置？
+  企业域名、服务部署环境、预计员工数、允许设备数、离线宽限与撤权时限。
+
+官方参考
+  固定源码：https://github.com/KaringX/karing/tree/4faa4a0965097b637f900e5639512e5ed41ec3b8
+  许可证：https://github.com/KaringX/karing/blob/4faa4a0965097b637f900e5639512e5ed41ec3b8/LICENSE.md
+  飞书登录概述：https://open.feishu.cn/document/client-docs/build-login-free-system-
+  获取授权码：https://open.feishu.cn/document/authentication-management/access-token/obtain-oauth-code
+  用户令牌：https://open.feishu.cn/document/authentication-management/access-token/get-user-access-token
+  员工离职：https://open.feishu.cn/document/server-docs/contact-v3/user/events/deleted
+  事件订阅：https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/event-subscription-guide/event-subscriptions
+  GPL FAQ：https://www.gnu.org/licenses/gpl-faq.en.html#InternalDistribution
+
+飞书部分官方 API 页面依赖脚本，浏览工具未获取到正文；以上端点文档作为实施查阅入口，非已联调契约。

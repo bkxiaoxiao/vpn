@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.ritfit.relay.enterprise</string>
+<key>CFBundleName</key><string>Relay Enterprise</string>
+<key>CFBundleDisplayName</key><string>Relay 企业连接</string>
+<key>CFBundleExecutable</key><string>RelayEnterprise</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleIconFile</key><string>Relay.icns</string>
+<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSAppleEventsUsageDescription</key><string>连接或断开企业线路时，恢复和设置当前网络的系统代理。</string>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>Enterprise Login</string><key>CFBundleURLSchemes</key><array><string>relay-enterprise</string></array></dict></array>
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+</dict></plist>

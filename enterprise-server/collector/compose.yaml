@@ -1,0 +1,22 @@
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: collector/Dockerfile
+    restart: unless-stopped
+    init: true
+    # Use a high unprivileged listen port in the admin UI, e.g. 8443.
+    ports:
+      - "8443:8443"
+    environment:
+      CONTROL_URL: ${CONTROL_URL:?required}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?required}
+      COLLECT_INTERVAL: 30
+    volumes:
+      - ./data:/data
+      - ${CERT_DIRECTORY:?required}:/certs:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

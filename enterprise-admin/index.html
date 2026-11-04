@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Relay · 企业网络控制台</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<aside class="sidebar">
+  <a href="#overview" class="brand"><span class="brand-mark">↗</span> relay</a>
+  <button class="workspace" data-action="workspace"><span class="workspace-icon">R</span><span><b id="workspace-name">RitFit Workspace</b><small>企业网络工作空间</small></span><span class="chevrons">⌃<br>⌄</span></button>
+  <div class="nav-label">工作空间</div><nav id="navigation"></nav>
+  <div class="sidebar-bottom"><div class="help-card"><span class="help-symbol">✧</span><b>让连接更简单</b><p>从订阅接入到员工分配，<br>在一个工作空间完成。</p><button data-action="guide">查看使用指南 <span>↗</span></button></div><button class="user" data-action="profile"><span class="avatar dark">J</span><span><b>Jack</b><small>工作空间管理员</small></span><span class="muted">⋯</span></button></div>
+</aside>
+<div class="app-shell"><header><div class="breadcrumb">工作空间 <span>/</span> <b id="crumb">总览</b></div><div class="header-right"><span class="demo-pill"><i></i> 交互原型 · 演示数据</span><button class="icon-button" aria-label="通知" data-action="notifications"><span class="notification-dot"></span><span id="bell"></span></button><span class="header-divider"></span><span class="avatar small">J</span></div></header><main id="main"></main><footer><span><i class="green-dot"></i> Relay 企业网络管理</span><span>统一资源 · 按需分配 · 安心连接 <span class="footer-dot">·</span> UI Preview 01</span></footer></div>
+<div id="overlay"></div><div id="toast" role="status"></div><script src="app.js"></script>
+</body></html>

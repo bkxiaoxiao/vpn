@@ -1,0 +1,6 @@
+Relay Enterprise includes sing-box 1.13.21 (arm64) as a separate executable.
+Upstream: https://github.com/SagerNet/sing-box/tree/v1.13.21
+License: GNU General Public License version 3 or later; see sing-box-LICENSE.txt.
+This test bundle uses the Homebrew 1.13.21 binary installed on the build machine.
+Core build tags are recorded in core-version.txt. No upstream service credentials are embedded.
+This is an independent enterprise test client and does not imply association with Karing.

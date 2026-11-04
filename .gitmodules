@@ -1,0 +1,3 @@
+[submodule "karing"]
+	path = karing
+	url = https://github.com/KaringX/karing.git

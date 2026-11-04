@@ -1,0 +1,29 @@
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    image: vpn-remote-gateway:0.2.0
+    container_name: vpn-remote-gateway
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      GATEWAY_API_PORT: "8443"
+      GATEWAY_PROXY_PORT: "1443"
+      TLS_CERT_PATH: /certs/fullchain.pem
+      TLS_KEY_PATH: /certs/privkey.pem
+    ports:
+      - "${PUBLIC_PROXY_PORT:-443}:1443"
+      - "${PUBLIC_API_PORT:-8443}:8443"
+    volumes:
+      - ./data:/data
+      - ${TLS_CERT_FILE}:/certs/fullchain.pem:ro
+      - ${TLS_KEY_FILE}:/certs/privkey.pem:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

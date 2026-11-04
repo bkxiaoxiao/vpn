@@ -364,6 +364,7 @@ test("HTTP auth, same-origin, privilege separation and gateway token scopes", as
       },
       body: b ? JSON.stringify(b) : undefined,
     });
+  assert.equal((await request("/health")).status, 200);
   assert.equal((await request("/healthz")).status, 200);
   assert.equal((await request("/api/bootstrap")).status, 401);
   assert.equal(

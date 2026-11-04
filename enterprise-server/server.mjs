@@ -31,7 +31,7 @@ export async function createControlServer(config, options = {}) {
       const url = new URL(req.url, "http://localhost"),
         p = url.pathname,
         m = req.method;
-      if (m === "GET" && p === "/healthz") {
+      if (m === "GET" && ["/health", "/healthz"].includes(p)) {
         await db.get("settings", "main");
         return json(res, 200, { ok: true });
       }

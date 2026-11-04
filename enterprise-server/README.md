@@ -104,7 +104,7 @@ https://你的控制服务/auth/feishu/callback
 
 | 接口 | 作用 |
 | --- | --- |
-| `GET /healthz` | 数据库健康检查 |
+| `GET /health` | 数据库健康检查 |
 | `POST /api/auth/login` | 管理员密码登录 |
 | `GET /api/bootstrap` | 脱敏后台数据 |
 | `POST /api/resources` | 导入 URL 或配置内容 |
@@ -151,7 +151,7 @@ https://你的控制服务/auth/feishu/callback
 3. 服务账号需要 Cloud SQL Client 和仅对应密钥的读取权限。明确 Cloud SQL 区域、备份和连接数预算。
 4. 在 `enterprise-server/` 设置 `PROJECT_ID`、`REGION`、`SERVICE_ACCOUNT`、`SQL_INSTANCE`、`PUBLIC_BASE_URL` 后运行 `sh deploy/cloud-run.sh`。脚本允许公共 HTTP 入口以接收飞书回调，业务接口由应用自行鉴权。
 5. Cloud Scheduler 使用 POST 请求和独立 `Authorization: Bearer JOB_TOKEN`，定期调用 `/api/jobs/refresh`（例如每 5 分钟，服务端按后台设置判断刷新是否到期）。不要把令牌放 URL 或日志。首版任务同步执行，订阅数量多时需拆分任务或延长/调整调度。
-6. 验证登录、数据库读写、授权、飞书回调和网关采样后，再让员工使用。容器读写不依赖实例本地持久文件；健康检查为 `/healthz`。
+6. 验证登录、数据库读写、授权、飞书回调和网关采样后，再让员工使用。容器读写不依赖实例本地持久文件；健康检查为 `/health`。
 
 控制服务监听 `0.0.0.0:$PORT`，TLS 由 Cloud Run 终止。SIGTERM 会关闭监听并释放数据库。资源和版本中的节点密钥采用 AES-256-GCM 应用层加密；加密密钥轮换需要迁移旧数据，首版尚未提供自动轮换工具。
 
@@ -197,3 +197,5 @@ node --check collector/agent.mjs
 只构建和测试、不部署的配置：`enterprise-server/deploy/cloud-build-verify.yaml`，需要传入 `_IMAGE`。构建成功后，生产服务还必须配置 PostgreSQL、DATA_KEY、ADMIN_PASSWORD 与 PUBLIC_BASE_URL，不能用 LOCAL_DEV 绕过生产鉴权和持久化。
 
 默认部署服务名与密钥前缀均为 `vpn`，可通过 SERVICE_NAME / SECRET_PREFIX 覆盖。飞书凭证可在创建应用后另行绑定，不作为管理后台启动的必要条件；客户端仍会拒绝没有真实飞书认证的配置请求。Cloud SQL Unix Socket 连接字符串应保留 `@localhost/数据库名`，再使用 `?host=/cloudsql/项目:区域:实例` 指定实际连接目录。
+
+线上健康检查统一使用 `/health`。容器仍保留 `/healthz` 兼容本机检查，但 Cloud Run 公网入口可能拦截该保留路径；不要将公网监控指向它。

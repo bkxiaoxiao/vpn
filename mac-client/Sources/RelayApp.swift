@@ -12,6 +12,12 @@ import AppKit
 }
 @MainActor final class AppDelegate:NSObject,NSApplicationDelegate {
     weak var model:AppModel?
+    func application(_ application:NSApplication,open urls:[URL]) {
+        for url in urls where model?.handleLoginCallback(url)==true {
+            application.activate(ignoringOtherApps:true)
+            application.windows.first(where:{$0.canBecomeKey})?.makeKeyAndOrderFront(nil)
+        }
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool {true}
     func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {model?.shutdown();return .terminateNow}
 }
@@ -48,7 +54,8 @@ struct MainView:View {
                     Text("仅代理遵循系统代理设置的应用，不是全设备 TUN VPN。接管时 macOS 可能要求管理员授权。").font(.system(size:9)).foregroundStyle(.secondary).lineSpacing(3)
                 }.padding(18).background(.white,in:RoundedRectangle(cornerRadius:10))
                 HStack(spacing:10){
-                    if !model.isAuthenticated{Button{Task{await model.login()}}label:{Label(model.busy ? "正在验证…":"通过飞书登录",systemImage:"person.crop.circle.badge.checkmark").frame(minWidth:135)}.buttonStyle(.borderedProminent).tint(forest).disabled(model.busy).accessibilityIdentifier("feishu-login")}
+                    if !model.isAuthenticated{Button{if model.waitingForBrowser{model.reopenLogin()}else{Task{await model.login()}}}label:{Label(model.waitingForBrowser ? "重新打开飞书":model.busy ? "正在验证…":"通过飞书登录",systemImage:"person.crop.circle.badge.checkmark").frame(minWidth:135)}.buttonStyle(.borderedProminent).tint(forest).disabled(model.busy && !model.waitingForBrowser).accessibilityIdentifier("feishu-login")}
+                    if model.busy && !model.isAuthenticated{Button("取消登录"){model.cancelLogin()}.buttonStyle(.bordered).accessibilityIdentifier("cancel-login")}
                     Button{Task{await model.sync()}}label:{Label("同步配置",systemImage:"arrow.triangle.2.circlepath")}.buttonStyle(.bordered).disabled(!model.isAuthenticated||model.busy||model.isConnected).accessibilityIdentifier("sync-policy")
                     if model.isConnected{Button("断开连接"){model.disconnect()}.buttonStyle(.borderedProminent).tint(forest)}else{Button("连接"){Task{await model.connect()}}.buttonStyle(.borderedProminent).tint(forest).disabled(!model.isAuthenticated||model.revision==nil||model.busy||model.needsRecovery).accessibilityIdentifier("connect")}
                     if model.busy{ProgressView().controlSize(.small)}

@@ -4,15 +4,16 @@
 
 ## 安装
 
-产物：`dist/Relay-Enterprise-0.1.0-macOS-arm64.dmg`，约 21 MB；Apple Silicon，macOS 13 或更新系统。将应用拖入 Applications 后打开。当前为本机 ad-hoc 签名，未经过 Developer ID 签名和 Apple 公证；其他机器上的 Gatekeeper 接受情况未验证。
+产物：`dist/Relay-Enterprise-0.1.1-macOS-arm64.dmg`，约 21 MB；Apple Silicon，macOS 13 或更新系统。将应用拖入 Applications 后打开。当前为本机 ad-hoc 签名，未经过 Developer ID 签名和 Apple 公证；其他机器上的 Gatekeeper 接受情况未验证。
 
-本次按用户要求生成“严格锁定的安装测试包”。企业飞书应用尚未创建，环境中没有飞书凭证，因此无法完成真实登录、配置同步或代理连接。客户端默认连接本机 `http://127.0.0.1:4181`，正式使用需要企业 HTTPS 服务地址。
+客户端保持严格飞书准入。当前服务已部署并配置飞书，默认连接 `https://vpn-243359801139.asia-east1.run.app`。登录可用范围由飞书后台管理；能登录不等于已获授权或已分配节点。服务端未发布配置或员工没有资源池时仍不能连接。
 
 ## 认证门槛
 
 - 没有匿名模式、测试账号、原始订阅导入或自定义节点入口。
 - 未登录时，同步与连接按钮禁用；凭证未配置时登录返回明确失败并继续锁定。
-- 使用 ASWebAuthenticationSession 系统认证窗口和固定回调 scheme，授权码只交给服务端。
+- 0.1.1 使用默认浏览器和固定回调 scheme，修复 ASWebAuthenticationSession 返回启动成功却不出现窗口时一直等待的问题；授权码仍只交给服务端。
+- 登录中可重新打开浏览器、取消并重试；等待超过 5 分钟自动结束。只接受当前待处理事务的完整回调，过期、重复、错误事务或额外重复参数不会完成登录。
 - 桌面发起登录时生成随机 verifier，以 SHA-256 challenge 绑定事务。企业 HTTPS 回调验证飞书企业和员工后，只向应用返回短期一次性票据；不在 URL 传递访问令牌或节点密钥。
 - 票据必须由发起登录的客户端携带 verifier 兑换；错误绑定、过期、重复兑换都会失败。
 - 设备会话由服务端真实飞书认证后签发，客户端会话最多 8 小时。设备安装标识仅用于同一员工重新登录时复用设备记录，不是认证凭证。
@@ -35,6 +36,7 @@
 
 ```sh
 sh mac-client/scripts/build.sh
+sh mac-client/scripts/test.sh
 ```
 
 脚本输出 `.app`、DMG 与 `SHA256SUMS.txt`；调用 swiftc 编译原生源码，生成图标，签名核心和应用并检查包结构。系统图标/磁盘映像工具在严格沙箱内可能无法访问 macOS 服务。
@@ -43,6 +45,7 @@ sh mac-client/scripts/build.sh
 
 - `Sources/EnterpriseAPI.swift`：服务 URL 校验、HTTPS/本机 HTTP 请求、策略格式与认证标志校验。
 - `Sources/AppModel.swift`：登录状态、票据绑定、同步、连接、周期验证、注销。
+- `Sources/BrowserLogin.swift`：默认浏览器打开、待处理回调、取消和超时。
 - `Sources/ProxyEngine.swift`：受控核心配置、回环端口、核心校验与生命周期。
 - `Sources/SystemProxy.swift`：网络代理快照、系统授权与恢复。
 - `Sources/RelayApp.swift`：原生 UI。
@@ -58,7 +61,7 @@ sh mac-client/scripts/build.sh
 
 如果需要员工用量，部署已有计量网关并为桌面设备分配网关后使用 gateway 分发模式。直连外购节点不提供可信员工计量，也不能靠本机 UI 锁定保证外购共享密码的网络侧失效。
 
-## 验证结果（2026-11-04）
+## 0.1.0 历史验证（2026-11-04）
 
 - arm64 原生编译完成，目标 macOS 13.0。
 - `codesign --verify --deep --strict` 与 Info.plist 校验通过。
@@ -70,3 +73,11 @@ sh mac-client/scripts/build.sh
 - 未完成真实飞书授权、安装到 Applications 后的验收、真实客户端代理流量、系统代理接管/恢复或 Apple 公证。
 
 正式分发前需在目标 Mac 上完成真实身份、代理和异常恢复测试。内置核心许可及版本信息已放入安装包 Resources。
+
+## 0.1.1 登录修复验证（2026-11-04）
+
+- 7 组原生回归检查通过，覆盖窗口打开失败、重新打开、取消、超时、并发事务、重复/错误回调和配置不可用与身份撤销的区分。
+- arm64 编译、应用和内置核心签名校验、Info.plist 校验及 DMG 生成通过。
+- 实际点击客户端登录，默认 Chrome 打开真实飞书授权页；完成既有账号授权后，原生 URL 回调成功返回客户端，并兑换为飞书设备会话。
+- 客户端显示真实账号和“已通过飞书认证”。服务端尚未发布配置时保持已登录、线路为空、连接禁用，允许后续同步；不会把缺少配置当作认证失败。
+- 本次没有启动代理、改变系统代理或验证外购节点连通性。真实流量与计量验收仍需在资源池和版本发布后进行。

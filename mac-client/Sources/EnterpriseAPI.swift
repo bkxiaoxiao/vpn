@@ -6,6 +6,7 @@ struct RelayFailure: LocalizedError {
     let status: Int
     init(_ message: String, status: Int = 0) { self.message = message; self.status = status }
     var errorDescription: String? { message }
+    var isPolicyUnavailable: Bool { status == 409 || (status == 403 && message == "没有获授权的已发布节点") }
 }
 struct AuthStart: Decodable { let authorizationURL: String; let transactionId: String }
 struct AuthResult: Decodable { let token: String; let deviceId: String; let name: String; let authentication: String; let expiresAt: String }

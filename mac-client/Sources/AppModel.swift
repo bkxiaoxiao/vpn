@@ -1,16 +1,16 @@
 import Foundation
 import AppKit
-import AuthenticationServices
 import CryptoKit
 import Security
 import Combine
 
-@MainActor final class AppModel:NSObject,ObservableObject,ASWebAuthenticationPresentationContextProviding {
-    @Published var serverAddress:String = UserDefaults.standard.string(forKey:"RelayServerAddress") ?? "http://127.0.0.1:4181"
+@MainActor final class AppModel:NSObject,ObservableObject {
+    @Published var serverAddress:String = UserDefaults.standard.string(forKey:"RelayServerAddress") ?? "https://vpn-243359801139.asia-east1.run.app"
     @Published var useSystemProxy=true
     @Published var isAuthenticated=false
     @Published var isConnected=false
     @Published var busy=false
+    @Published var waitingForBrowser=false
     @Published var displayName="未登录"
     @Published var message="请先通过飞书登录，才能同步企业配置与连接。"
     @Published var revision:Int?
@@ -24,7 +24,7 @@ import Combine
     private var sessionExpires:Date?
     private var policy:Policy?
     private var api:EnterpriseAPI?
-    private var webSession:ASWebAuthenticationSession?
+    private let browserLogin=BrowserLogin(opener: { NSWorkspace.shared.open($0) })
     private var maintenance:Task<Void,Never>?
     private var generation=UUID()
     private let engine:ProxyEngine
@@ -40,7 +40,6 @@ import Combine
         if needsRecovery {message="发现上次的代理恢复记录，请先恢复网络代理，再登录连接。"}
         engine.onExit={ [weak self] in guard let self,self.isConnected else{return};self.forceLock("代理核心已停止，请重新登录后连接。") }
     }
-    func presentationAnchor(for session:ASWebAuthenticationSession)->ASPresentationAnchor {NSApp.keyWindow ?? NSApp.windows.first ?? NSWindow()}
     private func base64url(_ data:Data)->String {data.base64EncodedString().replacingOccurrences(of:"+",with:"-").replacingOccurrences(of:"/",with:"_").replacingOccurrences(of:"=",with:"")}
     func login() async {
         guard !busy,!isAuthenticated else{return}
@@ -51,15 +50,10 @@ import Combine
             let verifier=base64url(Data(random)),challenge=base64url(Data(SHA256.hash(data:Data(verifier.utf8))))
             let start=try await service.start(challenge:challenge,installationId:installationId)
             guard generation==epoch else{return}
-            message="请在系统登录窗口完成飞书认证。"
-            let callback:URL = try await withCheckedThrowingContinuation { continuation in
-                let session=ASWebAuthenticationSession(url:URL(string:start.authorizationURL)!,callbackURLScheme:"relay-enterprise"){url,error in
-                    if let url {continuation.resume(returning:url)}else{continuation.resume(throwing:RelayFailure("飞书登录未完成或已取消"))}
-                }
-                session.presentationContextProvider=self;session.prefersEphemeralWebBrowserSession=true;webSession=session
-                if !session.start(){webSession=nil;continuation.resume(throwing:RelayFailure("无法打开系统飞书登录窗口"))}
-            }
-            guard generation==epoch else{return};webSession=nil
+            UserDefaults.standard.set(service.base.absoluteString,forKey:"RelayServerAddress")
+            waitingForBrowser=true;message="已在默认浏览器打开飞书登录。完成后会返回客户端；未出现时可点击“重新打开飞书”。"
+            let callback=try await browserLogin.begin(url:URL(string:start.authorizationURL)!,transactionId:start.transactionId)
+            guard generation==epoch else{return};waitingForBrowser=false
             guard let c=URLComponents(url:callback,resolvingAgainstBaseURL:false),c.scheme=="relay-enterprise",c.host=="auth",c.path=="/callback",let ticket=c.queryItems?.first(where:{$0.name=="ticket"})?.value,c.queryItems?.first(where:{$0.name=="transaction"})?.value==start.transactionId else{throw RelayFailure("登录回调不匹配",status:403)}
             let result=try await service.exchange(ticket:ticket,verifier:verifier,transactionId:start.transactionId)
             guard generation==epoch else{return}
@@ -68,11 +62,20 @@ import Combine
             message="飞书登录成功，正在同步企业配置…"
             try await synchronize(epoch:epoch)
             if generation==epoch {beginMaintenance()}
-        } catch {if generation==epoch{forceLock(friendly(error))}}
+        } catch {if generation==epoch{if waitForPolicy(error){beginMaintenance()}else{forceLock(friendly(error))}}}
+    }
+    func reopenLogin(){
+        guard waitingForBrowser else{return}
+        if browserLogin.reopen(){message="已重新打开默认浏览器，请完成飞书认证并允许返回 Relay。"}
+    }
+    func cancelLogin(){guard busy,!isAuthenticated else{return};forceLock("已取消飞书登录，可以重新发起。")}
+    @discardableResult func handleLoginCallback(_ url:URL)->Bool {
+        guard waitingForBrowser else{return false}
+        return browserLogin.accept(url)
     }
     func sync() async {
         guard isAuthenticated,!busy else{return};let epoch=generation;busy=true;defer{if generation==epoch{busy=false}}
-        do {try await synchronize(epoch:epoch)}catch {if generation==epoch{forceLock(friendly(error))}}
+        do {try await synchronize(epoch:epoch)}catch {if generation==epoch,!waitForPolicy(error){forceLock(friendly(error))}}
     }
     private func authorize() async throws -> (EnterpriseAPI,String){
         guard isAuthenticated,let token,let api,let expires=sessionExpires,expires>Date() else {throw RelayFailure("请重新通过飞书登录",status:401)}
@@ -102,7 +105,7 @@ import Combine
             try await service.ack(policy,stage:"applied",token:bearer)
             guard generation==epoch else{return}
             message=useSystemProxy ? "已连接。当前活动网络的系统代理已接管。":"已连接本地代理。请将测试应用代理设为 127.0.0.1:\(localPort)。"
-        } catch {if generation==epoch{forceLock(friendly(error))}}
+        } catch {if generation==epoch,!waitForPolicy(error){forceLock(friendly(error))}}
     }
     func disconnect(){
         engine.stop();isConnected=false;localPort=0
@@ -115,9 +118,15 @@ import Combine
         if let oldAPI,let oldToken{Task{_ = try? await oldAPI.request("/api/client/logout",method:"POST",token:oldToken,body:[:])}}
     }
     private func forceLock(_ reason:String){
-        generation=UUID();maintenance?.cancel();maintenance=nil;webSession?.cancel();webSession=nil
+        generation=UUID();maintenance?.cancel();maintenance=nil;browserLogin.cancel();waitingForBrowser=false
         token=nil;sessionExpires=nil;api=nil;policy=nil;isAuthenticated=false;displayName="未登录";revision=nil;routes=[];selectedRoute="";metering="";lastSync=nil;busy=false
         disconnect();message=needsRecovery ? reason+" 请恢复网络代理。":reason
+    }
+    private func waitForPolicy(_ error:Error)->Bool {
+        guard isAuthenticated,let failure=error as? RelayFailure,failure.isPolicyUnavailable else{return false}
+        disconnect();policy=nil;revision=nil;routes=[];selectedRoute="";metering="";lastSync=Date()
+        message="飞书登录成功。\(failure.message)，请管理员分配并发布线路后同步配置。"
+        return true
     }
     private func beginMaintenance(){
         maintenance?.cancel();maintenance=Task{[weak self] in
@@ -130,7 +139,7 @@ import Combine
                     guard self.generation==epoch else{return}
                     if let p=self.policy,p.expires<=Date(){throw RelayFailure("配置授权已过期，请重新登录",status:403)}
                     if !self.busy,let last=self.lastSync,Date().timeIntervalSince(last)>300 {try await self.synchronize(epoch:epoch)}
-                }catch{if self.generation==epoch{self.forceLock("无法确认飞书授权，已停止代理。"+self.friendly(error))};return}
+                }catch{if self.generation==epoch{if !self.waitForPolicy(error){self.forceLock("无法确认飞书授权，已停止代理。"+self.friendly(error));return}}else{return}}
             }
         }
     }
@@ -139,5 +148,5 @@ import Combine
         if error is URLError{return "无法连接企业服务，请检查服务地址和网络。"}
         return "操作未完成，请重试或联系管理员。"
     }
-    func shutdown(){maintenance?.cancel();webSession?.cancel();token=nil;policy=nil;disconnect()}
+    func shutdown(){generation=UUID();maintenance?.cancel();browserLogin.cancel();token=nil;policy=nil;disconnect()}
 }

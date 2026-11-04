@@ -53,7 +53,7 @@ Function .onInit
 FunctionEnd
 Section "Relay 企业连接"
  SetOutPath "$INSTDIR"
- File /r "${APP_DIR}/*"
+ File /r "${APP_DIR}\*"
  WriteUninstaller "$INSTDIR\Uninstall.exe"
  WriteRegStr HKCU "Software\Classes\relay-enterprise" "" "URL:Relay Enterprise Login"
  WriteRegStr HKCU "Software\Classes\relay-enterprise" "URL Protocol" ""

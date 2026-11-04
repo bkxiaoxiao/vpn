@@ -68,6 +68,29 @@ export async function openStore({ url, file = "./data/relay.sqlite" } = {}) {
     async del(kind, id) {
       await q("DELETE FROM documents WHERE kind=$1 AND id=$2", [kind, id]);
     },
+    async putMany(kind, records) {
+      for (let offset = 0; offset < records.length; offset += 500) {
+        const batch = records.slice(offset, offset + 500),
+          params = [];
+        const values = batch.map((record, i) => {
+          params.push(kind, record.id, JSON.stringify(record));
+          return `($${i * 3 + 1},$${i * 3 + 2},$${i * 3 + 3})`;
+        });
+        await q(
+          `INSERT INTO documents(kind,id,body) VALUES ${values.join(",")} ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body`,
+          params,
+        );
+      }
+    },
+    async delMany(kind, ids) {
+      for (let offset = 0; offset < ids.length; offset += 500) {
+        const batch = ids.slice(offset, offset + 500);
+        await q(
+          `DELETE FROM documents WHERE kind=$1 AND id IN (${batch.map((_, i) => `$${i + 2}`).join(",")})`,
+          [kind, ...batch],
+        );
+      }
+    },
   });
   let chain = Promise.resolve();
   const readers = helpers(base);

@@ -51,6 +51,7 @@ const navs = [
   ["gateways", "server", "计量网关"],
   ["releases", "shield", "配置发布"],
   ["audit", "history", "审计记录"],
+  ["feishu", "link", "飞书集成"],
   ["settings", "settings", "工作空间设置"],
 ];
 let state = null,
@@ -187,6 +188,7 @@ function render() {
     gateways,
     releases,
     audit,
+    feishu,
     settings,
   }[page]();
 }
@@ -275,7 +277,7 @@ function employeeTable() {
       .filter((e) => matches(e.name, e.dept, e.openId))
       .map((e) => {
         const u = usageData.employees.find((x) => x.employeeId === e.id);
-        return `<tr><td><div class="employee"><span class="avatar">${esc(e.name.slice(0, 1))}</span><span><strong>${esc(e.name)}</strong><small>${esc(e.openId)}</small></span></div></td><td>${esc(e.dept)}</td><td>${e.poolIds.map((id) => esc(state.pools.find((p) => p.id === id)?.name || "已删除")).join("、") || "尚未分配"}</td><td>${e.devices.filter((d) => !d.revokedAt).length} 台</td><td>${u?.metered ? bytes(u.uploadBytes + u.downloadBytes) : '<span class="muted">暂无计量采样</span>'}</td><td>${badge(e.enabled ? "已授权" : "已停用")}</td><td><button class="text-link" data-employee="${e.id}">管理</button></td></tr>`;
+        return `<tr><td><div class="employee"><span class="avatar">${esc(e.name.slice(0, 1))}</span><span><strong>${esc(e.name)}</strong><small>${esc(e.openId)}</small></span></div></td><td>${esc(e.dept)}</td><td>${e.poolIds.map((id) => esc(state.pools.find((p) => p.id === id)?.name || "已删除")).join("、") || "尚未分配"}</td><td>${e.devices.filter((d) => !d.revokedAt).length} 台</td><td>${u?.metered ? bytes(u.uploadBytes + u.downloadBytes) : '<span class="muted">暂无计量采样</span>'}</td><td>${badge(e.enabled ? "已授权" : e.directoryState === "active" ? "待授权" : "已停用")}</td><td><button class="text-link" data-employee="${e.id}">管理</button></td></tr>`;
       }),
   );
 }
@@ -284,8 +286,10 @@ function employees() {
     heading(
       "PEOPLE & DEVICES",
       "员工与设备",
-      "按飞书 open_id 授权员工。员工登录后注册设备并获取配置。",
-      button("添加员工", "new-employee", "plus", true),
+      "从飞书同步部门和员工，再按需分配网络访问权限。",
+      button("飞书配置", "feishu-config", "settings") +
+        button("同步飞书员工", "feishu-sync", "refresh") +
+        button("添加员工", "new-employee", "plus", true),
     ) +
     `<section class="panel">${toolbar("搜索姓名、部门或飞书身份")}<div id="results">${employeeTable()}</div></section><div style="height:20px"></div>${note("停用员工会撤销企业会话和设备授权。网关凭证会在采集器下次应用配置时移除；外购共享凭证需要供应商另外轮换。")}`
   );
@@ -446,7 +450,7 @@ function settings() {
         [24, "24 小时"],
       ],
       s.grace,
-    )}<p>客户端须执行过期策略。当前未修改 Karing 客户端，服务端到期时间不会自动限制外购共享节点。</p></section><section class="panel form-panel"><h2>飞书身份认证</h2><p>使用企业自建应用 OAuth 授权码流程。</p><div class="detail-row"><span>应用配置</span>${badge(state.environment.feishu ? "已配置" : "未配置", "neutral")}</div><div class="detail-row"><span>凭证保存位置</span><b>服务端环境变量 / Secret Manager</b></div><p>回调路径：/auth/feishu/callback<br>员工 open_id 需由管理员预先授权。通讯录自动同步和离职事件订阅尚未接入。</p></section><section class="panel form-panel"><h2>服务部署</h2><p>${state.environment.deployed ? "当前服务运行于 Google Cloud Run。" : "Cloud Run 部署文件已提供，尚未执行云端部署。"}</p><div class="detail-row"><span>当前数据库</span><b>${state.environment.database}</b></div><div class="detail-row"><span>当前环境</span><b>${state.environment.local ? "本机开发" : "服务端环境"}</b></div><div class="detail-row"><span>Cloud Run 持久化</span><b>外部 PostgreSQL</b></div><p>流量网关和计量采集器独立运行，控制服务不承载员工代理流量。</p></section></div></form>`
+    )}<p>客户端须执行过期策略。当前未修改 Karing 客户端，服务端到期时间不会自动限制外购共享节点。</p></section><section class="panel form-panel"><h2>飞书身份与组织同步</h2><p>在飞书集成中配置应用、检查权限并同步员工。</p><div class="detail-row"><span>应用配置</span>${badge(state.environment.feishu ? "已配置" : "未配置", "neutral")}</div><div class="detail-row"><span>最近同步</span><b>${fmtDate(state.feishu?.lastSync?.at)}</b></div><button type="button" class="btn" data-action="feishu-config" style="margin-top:18px">${icon("settings")}配置飞书集成</button><p>同步不会自动授权新员工。明确离职、冻结或不再可见的已同步员工会被停用。</p></section><section class="panel form-panel"><h2>服务部署</h2><p>${state.environment.deployed ? "当前服务运行于 Google Cloud Run。" : "Cloud Run 部署文件已提供，尚未执行云端部署。"}</p><div class="detail-row"><span>当前数据库</span><b>${state.environment.database}</b></div><div class="detail-row"><span>当前环境</span><b>${state.environment.local ? "本机开发" : "服务端环境"}</b></div><div class="detail-row"><span>Cloud Run 持久化</span><b>外部 PostgreSQL</b></div><p>流量网关和计量采集器独立运行，控制服务不承载员工代理流量。</p></section></div></form>`
   );
 }
 function modal(title, desc, body, label, submit) {
@@ -649,6 +653,47 @@ const actions = {
         ? "部分订阅更新失败，已保留原配置"
         : "订阅更新完成",
     );
+  },
+  "feishu-config": () => go("feishu"),
+  "save-feishu": async () => {
+    if (!$("#feishu-form").reportValidity()) return;
+    const d = Object.fromEntries(new FormData($("#feishu-form")));
+    d.rootIds = d.roots.split(/[,，\s]+/).filter(Boolean);
+    delete d.roots;
+    d.adminIds = d.admins.split(/[,，\s]+/).filter(Boolean);
+    delete d.admins;
+    await api("/feishu/config", "PUT", d);
+    await reload();
+    notify("飞书配置已加密保存；请检查连接并同步员工。");
+  },
+  "feishu-check": async () => {
+    const r = await api("/feishu/check", "POST", {});
+    notify(r.message);
+  },
+  "feishu-sync": () => {
+    if (!state.feishu?.configured) {
+      go("feishu");
+      notify("请先保存飞书应用配置");
+      return;
+    }
+    modal(
+      "同步飞书组织与员工",
+      "只读取已配置范围内的部门和基本身份信息。",
+      '<p class="guide-text">新员工默认待授权；已有员工保留资源池分配。明确离职、冻结或不再可见的已同步员工会被停用并撤销设备会话。任何分页失败都会中止，不写入半份通讯录。</p>',
+      "开始同步",
+      async () => {
+        const r = await api("/feishu/sync", "POST", {});
+        close();
+        await reload();
+        notify(
+          `同步完成：新增 ${r.added}，更新 ${r.updated}，停用 ${r.disabled}`,
+        );
+      },
+    );
+  },
+  "copy-feishu-callback": async () => {
+    await navigator.clipboard.writeText(state.feishu.callbackURL);
+    notify("已复制飞书回调地址");
   },
   "new-pool": () => editPool(),
   "new-employee": () => editEmployee(),
@@ -863,3 +908,28 @@ async function init() {
   }
 }
 init();
+
+function feishu() {
+  const f = state.feishu || { rootIds: ["0"], adminIds: [], departments: [] },
+    last = f.lastSync;
+  const doc = "https://open.feishu.cn/document/server-docs/contact-v3";
+  return (
+    heading(
+      "FEISHU INTEGRATION",
+      "飞书集成",
+      "配置企业身份、通讯录读取范围与员工同步。",
+      button("检查连接", "feishu-check", "link") +
+        button("同步员工", "feishu-sync", "refresh", true),
+    ) +
+    `<div class="form-grid"><section class="panel form-panel"><h2>企业自建应用</h2><p>App Secret 加密保存在服务端数据库，页面不会回显密钥。</p><form id="feishu-form">${field("App ID", "appId", f.appId || "")}<label class="field"><span>App Secret</span><input name="appSecret" type="password" autocomplete="new-password" maxlength="500" placeholder="${f.secretConfigured ? "已保存；留空保留原密钥" : "填写飞书应用密钥"}" ${f.secretConfigured ? "" : "required"}><small>不要把密钥发到聊天、订阅链接或员工客户端。</small></label>${field("企业 tenant_key", "tenantKey", f.tenantKey || "")}<p class="form-hint">tenant_key 是飞书身份接口返回的企业标识，不是数字企业 ID 或 App ID。</p>${field("同步根部门 ID", "roots", (f.rootIds || ["0"]).join(", "))}<p class="form-hint">默认 0 代表全员范围；如只授权部分部门，填写其 open_department_id，多个用逗号分隔。应用必须有相应数据范围。</p>${field("飞书管理员 open_id（可选）", "admins", (f.adminIds || []).join(", "), "text", false)}<p class="form-hint">仅填写需要进入管理后台的人员；员工无需加到这里。默认仍可用管理员密码管理。</p><button type="button" class="btn primary" data-action="save-feishu">${icon("check")}保存配置</button></form></section>
+  <section class="panel form-panel setup-guide"><h2>飞书开放平台配置步骤</h2><p>应用配置需在飞书后台发布并获管理员批准后生效。</p><ol><li><b>创建企业自建应用</b><p>在“凭证与基础信息”复制 App ID 和 App Secret；添加网页应用能力以使用授权登录。</p></li><li><b>配置重定向 URL</b><p>将下方完整 HTTPS 地址填入应用安全设置的重定向 URL。这里填写服务端地址，不是 relay-enterprise://。</p><input class="callback-input" readonly aria-label="飞书回调地址" value="${esc(f.callbackURL || "")}"><button type="button" class="text-link" data-action="copy-feishu-callback">复制回调地址 ${icon("download")}</button></li><li><b>开通通讯录只读权限</b><p>按 API 要求启用获取通讯录基本信息、用户基本信息、用户组织架构、部门基本信息和部门组织架构的只读权限。无需手机号、邮箱、薪酬或写通讯录权限。</p><code>contact:contact.base:readonly<br>contact:user.base:readonly<br>contact:user.department:readonly<br>contact:department.base:readonly<br>contact:department.organize:readonly</code></li><li><b>配置可用范围与可访问数据范围</b><p>全员同步时，应用通讯录数据范围需要覆盖全员；应用可用范围也应覆盖需要登录的员工。保存并发布版本。</p></li><li><b>保存 → 检查连接 → 同步员工</b><p>检查成功仅证明凭证与所选部门读取可用；tenant_key 会在真实飞书登录回调中再次校验。同步后到“员工与设备”授权并分配资源池。</p></li></ol><a class="text-link" href="${doc}" target="_blank" rel="noopener noreferrer">飞书官方通讯录文档 ${icon("external")}</a></section></div>
+  <div class="section-title"><h2>同步状态</h2>${badge(f.configured ? "应用已配置" : "尚未配置", "neutral")}</div><section class="panel"><div class="toolbar"><span>最近同步：${fmtDate(last?.at)}</span><span class="muted">${last ? `${last.employees} 位员工 · ${last.departments} 个部门 · 新增 ${last.added} / 更新 ${last.updated} / 停用 ${last.disabled}` : "暂无同步记录"}</span></div></section>
+  <div class="section-title"><h2>同步部门</h2><span class="muted">${(f.departments || []).length} 个</span></div><section class="panel">${table(
+    ["部门", "open_department_id", "上级部门"],
+    (f.departments || []).map(
+      (d) =>
+        `<tr><td><strong>${esc(d.name)}</strong></td><td>${esc(d.id)}</td><td>${esc((f.departments || []).find((x) => x.id === d.parentId)?.name || d.parentId || "—")}</td></tr>`,
+    ),
+  )}</section><div style="height:20px"></div>${note("同步为管理员手动触发，不是实时离职事件订阅。新员工不会自动获得网络权限；已有授权保留，已停用员工也不会因重新同步而自动启用。")}`
+  );
+}

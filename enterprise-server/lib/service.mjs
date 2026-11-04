@@ -200,7 +200,14 @@ export class ControlService {
       if (poolIds.some((x) => !pools.some((p) => p.id === x)))
         fail("资源池不存在");
       if (typeof body.enabled !== "boolean") fail("enabled 必须为布尔值");
+      if (
+        body.enabled &&
+        old?.directoryState &&
+        old.directoryState !== "active"
+      )
+        fail("该员工已离职、冻结或不在同步范围内，不能启用");
       const e = {
+        ...(old || {}),
         id: employeeId || id(),
         openId,
         name,
@@ -276,6 +283,7 @@ export class ControlService {
           deviceId: existing.id,
           role: "employee",
           authMethod: "feishu",
+          providerRevision: proof.providerRevision,
           feishuAt: proof.feishuAt,
           expires,
         });
@@ -323,6 +331,7 @@ export class ControlService {
         deviceId: d.id,
         role: "employee",
         authMethod: proof.authMethod || "admin-provisioned",
+        providerRevision: proof.providerRevision,
         feishuAt: proof.authMethod === "feishu" ? proof.feishuAt : null,
         expires: Date.now() + 8 * 3600_000,
       });

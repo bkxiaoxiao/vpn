@@ -1880,3 +1880,50 @@ button:disabled {
     display: none;
   }
 }
+.form-hint {
+  font-size: 10px;
+  line-height: 1.8;
+  color: #8b9c80;
+  margin: -8px 0 20px;
+}
+.setup-guide ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.setup-guide li {
+  padding: 0 0 19px 3px;
+  font-size: 11px;
+  color: #4d6a50;
+}
+.setup-guide li p {
+  font-size: 10px;
+  line-height: 1.9;
+  color: #87987a;
+  margin: 7px 0;
+}
+.setup-guide code {
+  display: block;
+  font-size: 10px;
+  line-height: 1.8;
+  color: #748b66;
+  background: #f6f9f2;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+}
+.callback-input {
+  width: 100%;
+  border: 1px solid #e1e9d9;
+  background: #f8faf4;
+  border-radius: 5px;
+  padding: 9px;
+  font-size: 10px;
+  color: #647b56;
+  margin: 5px 0 8px;
+}
+.setup-guide .text-link {
+  font-size: 10px;
+}
+#feishu-form .btn {
+  margin-top: 5px;
+}

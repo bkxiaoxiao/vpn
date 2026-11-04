@@ -53,9 +53,15 @@ export class DesktopAuth {
       verifier = text(body.verifier, "登录校验参数", 128),
       transactionId = text(body.transactionId, "登录事务", 64);
     if (!/^[A-Za-z0-9_-]{43,128}$/.test(verifier)) fail("登录校验参数无效");
+    const provider = await this.auth.feishuConfig();
     const grant = await this.db.tx(async (t) => {
       const g = await t.get("desktopGrants", hash(ticket));
-      if (!g || g.expires < Date.now() || g.transactionId !== transactionId)
+      if (
+        !g ||
+        g.expires < Date.now() ||
+        g.transactionId !== transactionId ||
+        g.providerRevision !== provider.revision
+      )
         fail("登录票据已失效", 403);
       const expected = createHash("sha256")
         .update(verifier)
@@ -73,6 +79,7 @@ export class DesktopAuth {
       grant.name,
       {
         authMethod: "feishu",
+        providerRevision: grant.providerRevision,
         feishuAt: grant.authenticatedAt,
         installationId: grant.desktop.installationId,
       },

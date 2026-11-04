@@ -80,6 +80,26 @@ export function loadConfig(env = process.env) {
   };
 }
 export function publicEmployee(e) {
-  const { id, name, dept, enabled, poolIds, openId, createdAt } = e;
-  return { id, name, dept, enabled, poolIds, openId, createdAt };
+  const {
+    id,
+    name,
+    dept,
+    enabled,
+    poolIds,
+    openId,
+    createdAt,
+    directoryState,
+    directorySyncedAt,
+  } = e;
+  return {
+    id,
+    name,
+    dept,
+    enabled,
+    poolIds,
+    openId,
+    createdAt,
+    directoryState,
+    directorySyncedAt,
+  };
 }

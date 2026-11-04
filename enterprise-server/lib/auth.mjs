@@ -1,7 +1,18 @@
 import { id, hash, now, fail, equal } from "./security.mjs";
 export class Auth {
-  constructor(db, config, fetcher = fetch) {
-    Object.assign(this, { db, config, fetcher });
+  constructor(db, config, fetcher = fetch, provider = null) {
+    Object.assign(this, { db, config, fetcher, provider });
+  }
+  async feishuConfig() {
+    return this.provider
+      ? this.provider()
+      : {
+          appId: this.config.feishuId,
+          appSecret: this.config.feishuSecret,
+          tenantKey: this.config.tenant,
+          adminIds: this.config.adminIds || [],
+          revision: "environment",
+        };
   }
   cookie(req) {
     return /(?:^|;\s*)relay_session=([^;]+)/.exec(
@@ -28,6 +39,11 @@ export class Auth {
     if (!token) fail("请先登录", 401);
     const s = await this.db.get("sessions", hash(token));
     if (!s || s.expires < Date.now()) fail("会话已失效，请重新登录", 401);
+    if (s.authMethod === "feishu") {
+      const provider = await this.feishuConfig();
+      if (provider.revision !== s.providerRevision)
+        fail("飞书应用配置已变更，请重新登录", 401);
+    }
     if (s.employeeId) {
       const e = await this.db.get("employees", s.employeeId);
       if (!e?.enabled) fail("员工已停用或未授权", 403);
@@ -86,11 +102,8 @@ export class Auth {
     return g;
   }
   async feishuStart(options = {}) {
-    if (
-      !this.config.feishuId ||
-      !this.config.feishuSecret ||
-      !this.config.tenant
-    )
+    const provider = await this.feishuConfig();
+    if (!provider.appId || !provider.appSecret || !provider.tenantKey)
       fail("尚未配置飞书应用", 503);
     const state = id() + id();
     await this.db.tx(async (t) => {
@@ -100,16 +113,18 @@ export class Auth {
         id: hash(state),
         expires: Date.now() + 300000,
         desktop: options.desktop || null,
+        providerRevision: provider.revision,
       });
     });
-    return { url: this.authorizationURL(state), state };
+    return { url: await this.authorizationURL(state), state };
   }
-  authorizationURL(state) {
+  async authorizationURL(state) {
+    const provider = await this.feishuConfig();
     const u = new URL(
       "https://accounts.feishu.cn/open-apis/authen/v1/authorize",
     );
     u.search = new URLSearchParams({
-      client_id: this.config.feishuId,
+      client_id: provider.appId,
       response_type: "code",
       redirect_uri: this.config.base + "/auth/feishu/callback",
       state,
@@ -124,6 +139,9 @@ export class Auth {
       await t.del("oauth", x.id);
       return x;
     });
+    const provider = await this.feishuConfig();
+    if (transaction.providerRevision !== provider.revision)
+      fail("飞书配置已变更，请重新发起登录", 403);
     const r = await this.fetcher(
       "https://open.feishu.cn/open-apis/authen/v2/oauth/token",
       {
@@ -131,8 +149,8 @@ export class Auth {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           grant_type: "authorization_code",
-          client_id: this.config.feishuId,
-          client_secret: this.config.feishuSecret,
+          client_id: provider.appId,
+          client_secret: provider.appSecret,
           code,
           redirect_uri: this.config.base + "/auth/feishu/callback",
         }),
@@ -153,13 +171,19 @@ export class Auth {
     if (
       result.code !== 0 ||
       !profile?.open_id ||
-      profile.tenant_key !== this.config.tenant
+      profile.tenant_key !== provider.tenantKey
     )
       fail("飞书身份或企业不匹配", 403);
     let employee = (await this.db.list("employees")).find(
       (e) => e.openId === profile.open_id,
     );
-    const admin = this.config.adminIds.includes(profile.open_id);
+    if (
+      employee?.directoryAppId &&
+      employee.directoryScope !==
+        hash(JSON.stringify([...(provider.rootIds || ["0"])].sort()))
+    )
+      fail("组织同步范围已变更，请管理员先同步飞书通讯录", 403);
+    const admin = provider.adminIds.includes(profile.open_id);
     if (!employee?.enabled && !admin)
       fail("尚未获得管理员授权，请联系管理员添加员工", 403);
     if (transaction.desktop) {
@@ -170,6 +194,7 @@ export class Auth {
         employeeId: employee.id,
         name: employee.name,
         authenticatedAt: Date.now(),
+        providerRevision: provider.revision,
       };
     }
     const session = await this.issue({
@@ -177,6 +202,7 @@ export class Auth {
       employeeId: employee?.id,
       name: profile.name,
       authMethod: "feishu",
+      providerRevision: provider.revision,
       feishuAt: Date.now(),
     });
     return { token: session };

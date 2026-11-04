@@ -7,6 +7,7 @@ import { loadConfig, vault, fail, hash, text, now } from "./lib/security.mjs";
 import { ControlService } from "./lib/service.mjs";
 import { Auth } from "./lib/auth.mjs";
 import { DesktopAuth } from "./lib/desktop-auth.mjs";
+import { FeishuDirectory } from "./lib/feishu-directory.mjs";
 
 const publicDir = fileURLToPath(new URL("./public/", import.meta.url));
 export async function createControlServer(config, options = {}) {
@@ -15,7 +16,16 @@ export async function createControlServer(config, options = {}) {
       (await openStore({ url: config.dbUrl, file: config.dbFile })),
     v = vault(config.dataKey),
     service = new ControlService(db, v, config, options.fetcher),
-    auth = new Auth(db, config, options.authFetch);
+    directory = new FeishuDirectory(
+      db,
+      v,
+      config,
+      service.audit.bind(service),
+      options.directoryFetch,
+    ),
+    auth = new Auth(db, config, options.authFetch, () =>
+      directory.credentials(),
+    );
   const desktop = new DesktopAuth(db, auth, service, config);
   await service.init();
   const server = http.createServer(async (req, res) => {
@@ -210,7 +220,11 @@ export async function createControlServer(config, options = {}) {
               session.employeeId,
               await readJson(req),
               actor,
-              { authMethod: "feishu", feishuAt: session.feishuAt },
+              {
+                authMethod: "feishu",
+                feishuAt: session.feishuAt,
+                providerRevision: session.providerRevision,
+              },
             ),
           );
         if (!session.deviceId) fail("需要设备令牌", 403);
@@ -238,8 +252,20 @@ export async function createControlServer(config, options = {}) {
         fail("接口不存在", 404);
       }
       if (session.role !== "admin") fail("仅限管理员访问", 403);
-      if (m === "GET" && p === "/api/bootstrap")
-        return json(res, 200, await service.bootstrap());
+      if (m === "GET" && p === "/api/bootstrap") {
+        const data = await service.bootstrap();
+        data.feishu = await directory.status();
+        data.environment.feishu = data.feishu.configured;
+        return json(res, 200, data);
+      }
+      if (m === "GET" && p === "/api/feishu/config")
+        return json(res, 200, await directory.status());
+      if (m === "PUT" && p === "/api/feishu/config")
+        return json(res, 200, await directory.save(await readJson(req), actor));
+      if (m === "POST" && p === "/api/feishu/check")
+        return json(res, 200, await directory.check());
+      if (m === "POST" && p === "/api/feishu/sync")
+        return json(res, 200, await directory.sync(actor));
       if (m === "GET" && p === "/api/usage") {
         const from =
             url.searchParams.get("from") ||
@@ -338,7 +364,7 @@ export async function createControlServer(config, options = {}) {
   });
   server.requestTimeout = 30000;
   server.headersTimeout = 15000;
-  return { server, db, service, auth, desktop };
+  return { server, db, service, auth, desktop, directory };
 }
 async function readJson(req) {
   if (!(req.headers["content-type"] || "").startsWith("application/json"))

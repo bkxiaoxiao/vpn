@@ -1,0 +1,13 @@
+Relay Enterprise for Windows includes sing-box 1.13.21 windows-amd64 as a separate executable.
+Upstream source: https://github.com/SagerNet/sing-box/tree/v1.13.21
+Core archive: sing-box-1.13.21-windows-amd64.zip
+Archive SHA-256: a03291793d3a3c6e266447a58140657ac099ff278abf3b8ff678932356a62ced
+License: GNU General Public License version 3 or later. See sing-box-LICENSE.txt.
+
+This package also includes the Microsoft .NET 10 desktop runtime under its applicable MIT and third-party licenses.
+See the runtime LICENSE.txt and ThirdPartyNotices.txt files shipped in this directory.
+Runtime source: https://github.com/dotnet/runtime
+WPF source: https://github.com/dotnet/wpf
+
+This is an independent enterprise client. It is not an official Karing distribution.
+No Feishu App Secret, employee access token, upstream subscription address or node credential is embedded in the package.

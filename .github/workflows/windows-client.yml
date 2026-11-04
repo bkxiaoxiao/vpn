@@ -1,0 +1,47 @@
+name: Windows client
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows-client/**'
+      - 'mac-client/Tests/core-fixture.py'
+      - '.github/workflows/windows-client.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-client-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.403'
+      - name: Download verified core
+        shell: pwsh
+        run: ./windows-client/scripts/fetch-core.ps1
+      - name: Authentication and real Windows core tests
+        shell: pwsh
+        working-directory: windows-client
+        run: |
+          $env:RELAY_TEST_CORE = (Resolve-Path .tools/sing-box.exe).Path
+          dotnet run --project tests/RelayTests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Windows client tests failed' }
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+      - name: Build installer and portable package
+        shell: pwsh
+        run: ./windows-client/scripts/build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Relay-Enterprise-0.1.2-Windows-x64
+          path: |
+            windows-client/dist/*Setup.exe
+            windows-client/dist/*Portable.zip
+            windows-client/dist/SHA256SUMS.txt
+          retention-days: 30

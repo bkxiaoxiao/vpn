@@ -85,13 +85,14 @@ async function app(t, configured = true) {
     });
   return { ...app, config, employee, request };
 }
-async function begin(a, installationId = randomUUID()) {
+async function begin(a, installationId = randomUUID(), platform) {
   const verifier = randomBytes(32).toString("base64url"),
     challenge = createHash("sha256").update(verifier).digest("base64url");
   const start = await a.request("/api/desktop/auth/start", {
     challenge,
     installationId,
     deviceName: "Mac Test",
+    ...(platform ? { platform } : {}),
   });
   assert.equal(start.status, 200);
   const body = await start.json();
@@ -232,4 +233,19 @@ test("expired or substituted desktop grants cannot be exchanged", async (t) => {
     (await a.request("/api/desktop/auth/exchange", flow)).status,
     403,
   );
+});
+test("Windows desktop sessions preserve their platform without weakening Feishu authentication", async (t) => {
+  const a = await app(t);
+  const flow = await begin(a, randomUUID(), "Windows");
+  const response = await a.request("/api/desktop/auth/exchange", flow);
+  assert.equal(response.status, 200);
+  const session = await response.json();
+  const device = await a.db.get("devices", session.deviceId);
+  assert.equal(device.platform, "Windows");
+  assert.equal(session.authentication, "feishu");
+  assert.equal((await a.request("/api/client/policy", undefined, session.token)).status, 200);
+  const invalid = await a.request("/api/desktop/auth/start", {
+    challenge: "a".repeat(43), installationId: randomUUID(), deviceName: "Test", platform: "admin",
+  });
+  assert.equal(invalid.status, 400);
 });

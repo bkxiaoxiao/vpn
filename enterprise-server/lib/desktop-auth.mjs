@@ -8,14 +8,16 @@ export class DesktopAuth {
   async start(body) {
     const challenge = text(body.challenge, "登录绑定参数", 43),
       installationId = text(body.installationId, "安装标识", 100),
-      deviceName = text(body.deviceName, "设备名称", 100);
+      deviceName = text(body.deviceName, "设备名称", 100),
+      platform = body.platform ?? "macOS";
+    if (!["macOS", "Windows"].includes(platform)) fail("桌面设备平台无效");
     if (
       !/^[A-Za-z0-9_-]{43}$/.test(challenge) ||
       !/^[A-Za-z0-9-]{36}$/.test(installationId)
     )
       fail("桌面登录参数无效");
     const result = await this.auth.feishuStart({
-      desktop: { challenge, installationId, deviceName },
+      desktop: { challenge, installationId, deviceName, platform },
     });
     return {
       authorizationURL:
@@ -75,7 +77,7 @@ export class DesktopAuth {
     });
     const device = await this.service.createDevice(
       grant.employeeId,
-      { name: grant.desktop.deviceName, platform: "macOS" },
+      { name: grant.desktop.deviceName, platform: grant.desktop.platform || "macOS" },
       grant.name,
       {
         authMethod: "feishu",

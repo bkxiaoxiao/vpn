@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+ <ItemGroup>
+  <Compile Include="Program.cs" />
+  <Compile Include="../src/RelayEnterprise/Models.cs" Link="Models.cs" />
+  <Compile Include="../src/RelayEnterprise/BrowserLogin.cs" Link="BrowserLogin.cs" />
+  <Compile Include="../src/RelayEnterprise/CoreController.cs" Link="CoreController.cs" />
+  <Compile Include="../src/RelayEnterprise/CoreEngine.cs" Link="CoreEngine.cs" />
+  <Compile Include="../src/RelayEnterprise/CoreJob.cs" Link="CoreJob.cs" />
+  <Compile Include="../src/RelayEnterprise/LocalStorage.cs" Link="LocalStorage.cs" />
+  <Compile Include="../src/RelayEnterprise/SystemProxy.cs" Link="SystemProxy.cs" />
+ </ItemGroup>
+</Project>

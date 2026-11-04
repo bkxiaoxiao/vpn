@@ -4,7 +4,7 @@
 
 ## 安装
 
-产物：`dist/Relay-Enterprise-0.1.1-macOS-arm64.dmg`，约 21 MB；Apple Silicon，macOS 13 或更新系统。将应用拖入 Applications 后打开。当前为本机 ad-hoc 签名，未经过 Developer ID 签名和 Apple 公证；其他机器上的 Gatekeeper 接受情况未验证。
+产物：`dist/Relay-Enterprise-0.1.2-macOS-arm64.dmg`，约 21 MB；Apple Silicon，macOS 13 或更新系统。将应用拖入 Applications 后打开。当前为本机 ad-hoc 签名，未经过 Developer ID 签名和 Apple 公证；其他机器上的 Gatekeeper 接受情况未验证。
 
 客户端保持严格飞书准入。当前服务已部署并配置飞书，默认连接 `https://vpn-243359801139.asia-east1.run.app`。登录可用范围由飞书后台管理；能登录不等于已获授权或已分配节点。服务端未发布配置或员工没有资源池时仍不能连接。
 
@@ -20,6 +20,9 @@
 - 管理后台密码、本机开发管理员身份、后台手动创建设备令牌，都不能获取或使用客户端配置。
 - 令牌只保存在内存。应用重开要求重新进行飞书登录；企业服务设置和随机安装标识可以保存，但不保存登录凭证或可导入的离线节点配置。
 - 每次连接前重新获取授权与配置；运行期间每 30 秒校验，约每 5 分钟同步。注销、过期、撤权、控制服务无法访问或核心退出会清理登录状态并停止代理。
+- 连接中可选择其他已授权线路；切换前重新校验服务端授权，核心 selector 切换后确认实际选择，本地端口保持不变。已有连接会被中断并在新线路重建；不重新设置系统代理或请求系统代理权限。切换未确认时读取实际线路，仍无法确认则断开。
+- 首次连接检测所有已授权线路的延迟，之后连接期间每小时更新，最多 4 条并发。经各线路发送 HTTPS HEAD 到公开检测地址，结果为访问该地址的耗时，不是带宽或纯 ICMP ping。失败显示“超时/不可达”，未检测显示“未检测”。检测不会修改选中线路。
+- 延迟结果只在当前登录内存中保留。断开时取消检测；授权线路或发布版本变化时清空缓存；退出登录时清理结果。休眠错过刷新时，在恢复后下一次授权维护周期补测。
 - 活跃运行所需的节点配置放在用户 Application Support 的专属 0700 目录、0600 文件中，停止/退出时删除。系统仍可能留下文件系统恢复痕迹，不能据此保证机器所有者无法提取凭证。
 
 ## 代理与恢复
@@ -47,6 +50,8 @@ sh mac-client/scripts/test.sh
 - `Sources/AppModel.swift`：登录状态、票据绑定、同步、连接、周期验证、注销。
 - `Sources/BrowserLogin.swift`：默认浏览器打开、待处理回调、取消和超时。
 - `Sources/ProxyEngine.swift`：受控核心配置、回环端口、核心校验与生命周期。
+- `Sources/CoreController.swift`：带随机密钥的回环控制接口、在线 selector 切换和逐线路 HTTPS 延迟检测。
+- `Sources/RouteLatency.swift`：延迟状态和一小时缓存有效期。
 - `Sources/SystemProxy.swift`：网络代理快照、系统授权与恢复。
 - `Sources/RelayApp.swift`：原生 UI。
 - `Resources/core-watchdog.sh`：父进程消失时终止核心。
@@ -81,3 +86,13 @@ sh mac-client/scripts/test.sh
 - 实际点击客户端登录，默认 Chrome 打开真实飞书授权页；完成既有账号授权后，原生 URL 回调成功返回客户端，并兑换为飞书设备会话。
 - 客户端显示真实账号和“已通过飞书认证”。服务端尚未发布配置时保持已登录、线路为空、连接禁用，允许后续同步；不会把缺少配置当作认证失败。
 - 本次没有启动代理、改变系统代理或验证外购节点连通性。真实流量与计量验收仍需在资源池和版本发布后进行。
+
+## 0.1.2 在线切换与延迟验证（2026-11-04）
+
+- 共 12 组原生检查通过，包括既有 7 组登录回归及 5 组路由/延迟集成检查。
+- 使用真实 sing-box 核心和隔离的回环 HTTP 代理，验证切换前后请求分别由不同代理响应，核心运行标识与本地代理端口保持不变。
+- 验证中文和特殊字符线路名、未授权线路拒绝、控制接口密钥、运行配置文件权限、停机清理与授权续期。
+- 延迟集成测试通过两个测试代理分别发送无凭证的 Apple 公开 HTTPS HEAD 请求，TLS 校验开启；验证正常延迟、不可达线路和检测期间选中线路保持不变。该部分测试需要互联网。
+- 一小时边界采用可控时钟验证，不需要实际等待一小时。测试不修改系统代理或生产员工、节点配置；供应商线路的实时延迟以客户端显示为准。
+
+官方接口参考：[sing-box Selector](https://sing-box.sagernet.org/configuration/outbound/selector/)、[Clash API 配置](https://sing-box.sagernet.org/configuration/experimental/clash-api/)、[固定版本控制与检测实现](https://github.com/SagerNet/sing-box/blob/v1.13.21/experimental/clashapi/proxies.go)。

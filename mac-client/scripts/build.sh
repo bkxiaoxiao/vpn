@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 project_root=$(pwd)
 build_dir="$project_root/build"
-app_dir="$project_root/dist/Relay Enterprise.app"
+app_dir=${APP_BUNDLE_PATH:-"$project_root/dist/Relay Enterprise.app"}
 app_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 mkdir -p "$build_dir/module-cache" "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 core_path=${SING_BOX_PATH:-/opt/homebrew/bin/sing-box}

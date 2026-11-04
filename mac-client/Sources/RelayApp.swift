@@ -48,7 +48,9 @@ struct MainView:View {
                     HStack{Text("企业线路").font(.system(size:12,weight:.semibold));Spacer();if let revision=model.revision{Text("配置 v\(revision)").font(.system(size:10)).foregroundStyle(.secondary)}}
                     if !model.isAuthenticated {HStack(spacing:12){Image(systemName:"lock.circle").font(.system(size:28)).foregroundStyle(forest.opacity(0.55));VStack(alignment:.leading,spacing:5){Text("登录后自动同步").font(.system(size:12,weight:.medium));Text("不支持匿名连接、手动导入或跳过登录。").font(.system(size:10)).foregroundStyle(.secondary)}}.padding(.vertical,10)}
                     else if model.routes.isEmpty {Text("等待管理员发布或分配配置。").font(.system(size:11)).foregroundStyle(.secondary)}
-                    else {Picker("选择线路",selection:$model.selectedRoute){ForEach(model.routes,id:\.self){route in Text(routeName(route)).tag(route)}}.disabled(model.busy||model.isConnected);Text(model.metering=="gateway" ? "企业网关计量模式":"外购节点直连 · 不包含企业网关用量统计").font(.system(size:10)).foregroundStyle(.secondary)}
+                    else {Picker("选择线路",selection:Binding(get:{model.selectedRoute},set:{route in Task{await model.chooseRoute(route)}})){ForEach(model.routes,id:\.self){route in Text(routeName(route)+" · "+model.latency.label(for:route,measuring:model.measuringLatency)).tag(route)}}.disabled(model.busy).accessibilityIdentifier("route-picker")
+                        HStack(spacing:6){if model.measuringLatency{ProgressView().controlSize(.mini)};Text(model.measuringLatency ? "正在检测线路延迟…":model.latency.updatedAt.map{"延迟更新于 "+$0.formatted(date:.omitted,time:.shortened)+" · 每小时更新"} ?? "首次连接后检测延迟，每小时更新").font(.system(size:9)).foregroundStyle(.secondary)}
+                        Text(model.metering=="gateway" ? "企业网关计量模式":"外购节点直连 · 不包含企业网关用量统计").font(.system(size:10)).foregroundStyle(.secondary)}
                     Divider()
                     Toggle("接管当前网络的系统代理",isOn:$model.useSystemProxy).toggleStyle(.switch).font(.system(size:11)).disabled(model.busy||model.isConnected)
                     Text("仅代理遵循系统代理设置的应用，不是全设备 TUN VPN。接管时 macOS 可能要求管理员授权。").font(.system(size:9)).foregroundStyle(.secondary).lineSpacing(3)

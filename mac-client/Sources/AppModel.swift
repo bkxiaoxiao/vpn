@@ -20,12 +20,16 @@ import Combine
     @Published var metering=""
     @Published var needsRecovery=false
     @Published var lastSync:Date?
+    @Published var latency=RouteLatencySnapshot()
+    @Published var measuringLatency=false
     private var token:String?
     private var sessionExpires:Date?
     private var policy:Policy?
     private var api:EnterpriseAPI?
     private let browserLogin=BrowserLogin(opener: { NSWorkspace.shared.open($0) })
     private var maintenance:Task<Void,Never>?
+    private var latencyTask:Task<Void,Never>?
+    private var latencyBatch=UUID()
     private var generation=UUID()
     private let engine:ProxyEngine
     private let proxy:SystemProxy
@@ -84,11 +88,13 @@ import Combine
     }
     private func synchronize(epoch:UUID) async throws {
         let (service,bearer)=try await authorize();let next=try await service.policy(token:bearer);guard generation==epoch else{return}
-        let changed=revision != nil && revision != next.revision
+        let changed=revision != nil && (revision != next.revision || routes != next.routes)
         if changed && isConnected {disconnect();message="组织配置已更新，连接已断开，请选择线路后重新连接。"}
+        if revision != next.revision || routes != next.routes {cancelLatency();latency=RouteLatencySnapshot()}
         policy=next;revision=next.revision;routes=next.routes;metering=next.metering;lastSync=Date()
+        if isConnected {try engine.renewAuthorization(next)}
         if !routes.contains(selectedRoute){selectedRoute=routes[0]}
-        try await service.ack(next,stage:"validated",token:bearer)
+        try await service.ack(next,stage:isConnected ? "applied":"validated",token:bearer)
         if generation==epoch {message=isConnected ? "连接正常，飞书授权已校验。":"配置 v\(next.revision) 已同步。连接前会再次校验飞书授权。"}
     }
     func connect() async {
@@ -105,9 +111,52 @@ import Combine
             try await service.ack(policy,stage:"applied",token:bearer)
             guard generation==epoch else{return}
             message=useSystemProxy ? "已连接。当前活动网络的系统代理已接管。":"已连接本地代理。请将测试应用代理设为 127.0.0.1:\(localPort)。"
+            refreshLatenciesIfNeeded()
         } catch {if generation==epoch,!waitForPolicy(error){forceLock(friendly(error))}}
     }
+    func chooseRoute(_ route:String) async {
+        guard isAuthenticated,!busy,routes.contains(route),route != selectedRoute else{return}
+        guard isConnected else{selectedRoute=route;return}
+        let epoch=generation;busy=true;message="正在切换线路…";defer{if generation==epoch{busy=false}}
+        do {
+            try await synchronize(epoch:epoch)
+            guard generation==epoch else{return}
+            guard routes.contains(route) else{message="该线路授权已更新，请重新选择。";return}
+            guard isConnected else{selectedRoute=route;message="配置已更新，线路已选择，请重新连接。";return}
+        } catch {if generation==epoch,!waitForPolicy(error){forceLock(friendly(error))};return}
+        do {
+            try await engine.select(route)
+            guard generation==epoch,isConnected else{return}
+            selectedRoute=route;message="线路已切换。已有连接会在新线路重新建立。"
+        } catch {
+            guard generation==epoch,isConnected else{return}
+            if let actual=try? await engine.currentRoute(),generation==epoch,isConnected {
+                selectedRoute=actual
+                message=actual==route ? "线路已切换。已有连接会在新线路重新建立。":"切换未成功，已保持原线路，请重试。"
+            } else if generation==epoch {disconnect();message="无法确认线路切换结果，已断开，请重新连接。"}
+        }
+    }
+    private func cancelLatency(){latencyBatch=UUID();latencyTask?.cancel();latencyTask=nil;measuringLatency=false}
+    private func refreshLatenciesIfNeeded(){
+        guard isAuthenticated,isConnected,latencyTask==nil,latency.needsRefresh(),let runId=engine.runId else{return}
+        let epoch=generation,batch=UUID(),targets=routes,core=engine;latencyBatch=batch;measuringLatency=true
+        latencyTask=Task{[weak self] in
+            guard let self else{return}
+            await withTaskGroup(of:(String,RouteLatency).self){group in
+                var remaining=targets.makeIterator()
+                for _ in 0..<min(4,targets.count){if let route=remaining.next(){group.addTask{(route,await core.measureLatency(route))}}}
+                while let (route,result)=await group.next(){
+                    guard !Task.isCancelled,self.generation==epoch,self.latencyBatch==batch,self.isConnected,core.runId==runId else{group.cancelAll();return}
+                    self.latency.values[route]=result
+                    if let next=remaining.next(){group.addTask{(next,await core.measureLatency(next))}}
+                }
+            }
+            guard !Task.isCancelled,self.generation==epoch,self.latencyBatch==batch,self.isConnected,core.runId==runId else{return}
+            self.latency.updatedAt=Date();self.measuringLatency=false;self.latencyTask=nil
+        }
+    }
     func disconnect(){
+        cancelLatency()
         engine.stop();isConnected=false;localPort=0
         do{try proxy.restore();needsRecovery=false;message="已断开，网络代理设置已恢复。"}catch{needsRecovery=proxy.needsRecovery;message="代理已停止，但系统设置尚未恢复。请点击“恢复网络代理”。"}
     }
@@ -119,12 +168,12 @@ import Combine
     }
     private func forceLock(_ reason:String){
         generation=UUID();maintenance?.cancel();maintenance=nil;browserLogin.cancel();waitingForBrowser=false
-        token=nil;sessionExpires=nil;api=nil;policy=nil;isAuthenticated=false;displayName="未登录";revision=nil;routes=[];selectedRoute="";metering="";lastSync=nil;busy=false
+        token=nil;sessionExpires=nil;api=nil;policy=nil;isAuthenticated=false;displayName="未登录";revision=nil;routes=[];selectedRoute="";metering="";lastSync=nil;busy=false;latency=RouteLatencySnapshot()
         disconnect();message=needsRecovery ? reason+" 请恢复网络代理。":reason
     }
     private func waitForPolicy(_ error:Error)->Bool {
         guard isAuthenticated,let failure=error as? RelayFailure,failure.isPolicyUnavailable else{return false}
-        disconnect();policy=nil;revision=nil;routes=[];selectedRoute="";metering="";lastSync=Date()
+        disconnect();policy=nil;revision=nil;routes=[];selectedRoute="";metering="";lastSync=Date();latency=RouteLatencySnapshot()
         message="飞书登录成功。\(failure.message)，请管理员分配并发布线路后同步配置。"
         return true
     }
@@ -139,6 +188,7 @@ import Combine
                     guard self.generation==epoch else{return}
                     if let p=self.policy,p.expires<=Date(){throw RelayFailure("配置授权已过期，请重新登录",status:403)}
                     if !self.busy,let last=self.lastSync,Date().timeIntervalSince(last)>300 {try await self.synchronize(epoch:epoch)}
+                    if !self.busy {self.refreshLatenciesIfNeeded()}
                 }catch{if self.generation==epoch{if !self.waitForPolicy(error){self.forceLock("无法确认飞书授权，已停止代理。"+self.friendly(error));return}}else{return}}
             }
         }

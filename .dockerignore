@@ -1,0 +1,11 @@
+# Include only the control service's runtime sources in the root build context.
+**
+!Dockerfile
+!enterprise-server/
+!enterprise-server/package.json
+!enterprise-server/package-lock.json
+!enterprise-server/server.mjs
+!enterprise-server/lib/
+!enterprise-server/lib/**
+!enterprise-server/public/
+!enterprise-server/public/**

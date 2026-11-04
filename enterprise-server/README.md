@@ -144,7 +144,7 @@ https://你的控制服务/auth/feishu/callback
 
 ## Google Cloud Run
 
-提供 `Dockerfile`、锁定的 npm 依赖和 `deploy/cloud-run.sh`，**未执行云端部署**。
+提供根目录和子目录两种构建入口、锁定的 npm 依赖和 `deploy/cloud-run.sh`。部署前应配置外部 PostgreSQL 与 Secret Manager，实际部署状态以目标 Cloud Run 修订为准。
 
 1. 准备 PostgreSQL / Cloud SQL 数据库与最小权限业务账号。服务启动会创建所需表；数据库账号需要首次建表权限。
 2. 在 Secret Manager 创建脚本引用的密钥版本，生产 DATA_KEY 为独立 32 字节随机数的十六进制表示。使用 Cloud SQL Unix Socket 连接字符串，避免在命令行明文传入密码。
@@ -168,7 +168,7 @@ node --check collector/agent.mjs
 
 已验证：18 项测试（资源解析、SSRF 地址限制、加密脱敏、用量幂等/冲突/原子回滚、跨网关凭证限制、设备停用、版本回滚、客户端配置授权、SQLite 重启持久化、HTTP 登录与权限隔离、真实 sing-box 分流配置校验）。
 
-本机 Homebrew sing-box 没有 `with_v2ray_api`，真实核心校验时排除了计量 API 配置；因此不能据此声称完成了真实网关端到端流量验证。本机没有 Docker / PostgreSQL 服务，容器构建、PostgreSQL 实例和 Cloud Run 均尚未实测。生产上线前还需使用带计量支持的核心、真实节点与飞书身份联调。
+本机 Homebrew sing-box 没有 `with_v2ray_api`，真实核心校验时排除了计量 API 配置；因此不能据此声称完成了真实网关端到端流量验证。首次本地开发时没有 Docker / PostgreSQL 服务；此限制不代表后续云端验证状态。镜像构建和数据库配置应以部署记录为准。生产上线前还需使用带计量支持的核心、真实节点与飞书身份联调。
 
 官方参考：[Cloud Run 容器约定](https://docs.cloud.google.com/run/docs/container-contract)、[sing-box V2Ray API](https://sing-box.sagernet.org/configuration/experimental/v2ray-api/)、[固定版本计量实现](https://github.com/SagerNet/sing-box/blob/v1.13.21/experimental/v2rayapi/stats.go)、[飞书用户令牌](https://open.feishu.cn/document/authentication-management/access-token/get-user-access-token)。
 
@@ -187,3 +187,13 @@ node --check collector/agent.mjs
 所有 `/api/client/*` 均强制要求 `authMethod=feishu` 且认证时间仍有效。本机开发管理员默认绕过不适用于客户端接口；管理员手动签发的设备令牌不能获取策略。此前“管理员注册设备后直接用令牌拉配置”的测试步骤已被此限制替代。飞书 App Secret 仍只放在服务端。
 
 目前共 23 项测试通过；桌面协议测试使用代码层注入的测试上游响应，未向应用或 HTTP 服务提供演示认证后门。真实飞书应用尚未配置，安装包因此维持锁定。
+
+## 仓库根目录构建入口
+
+通过 Cloud Run 控制台关联本仓库时，可以使用默认的根目录 `Dockerfile`，构建上下文为仓库根目录。它只复制 `enterprise-server` 的运行依赖与源码；`.dockerignore` 采用白名单，避免将本地凭证、数据库、macOS 构建产物或 Karing 参考源码送入镜像。
+
+如果手动进入 `enterprise-server/` 后执行 `gcloud run deploy --source .`，则使用该目录原有的 Dockerfile。不能在根目录上下文中直接使用子目录 Dockerfile 而不调整 COPY 路径。
+
+只构建和测试、不部署的配置：`enterprise-server/deploy/cloud-build-verify.yaml`，需要传入 `_IMAGE`。构建成功后，生产服务还必须配置 PostgreSQL、DATA_KEY、ADMIN_PASSWORD 与 PUBLIC_BASE_URL，不能用 LOCAL_DEV 绕过生产鉴权和持久化。
+
+默认部署服务名与密钥前缀均为 `vpn`，可通过 SERVICE_NAME / SECRET_PREFIX 覆盖。飞书凭证可在创建应用后另行绑定，不作为管理后台启动的必要条件；客户端仍会拒绝没有真实飞书认证的配置请求。Cloud SQL Unix Socket 连接字符串应保留 `@localhost/数据库名`，再使用 `?host=/cloudsql/项目:区域:实例` 指定实际连接目录。

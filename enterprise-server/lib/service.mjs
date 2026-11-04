@@ -80,7 +80,7 @@ export class ControlService {
         local: this.config.local,
         database: this.db.type,
         feishu: !!(this.config.feishuId && this.config.tenant),
-        deployed: !!this.config.production,
+        deployed: !!this.config.cloudRun,
       },
     };
   }

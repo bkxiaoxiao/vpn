@@ -64,6 +64,7 @@ export function loadConfig(env = process.env) {
   return {
     local,
     production,
+    cloudRun: !!env.K_SERVICE,
     port: Number(env.PORT || 4181),
     host: local ? "127.0.0.1" : "0.0.0.0",
     base,

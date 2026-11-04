@@ -1,0 +1,17 @@
+# Build from the repository root, without deploying or changing service traffic.
+steps:
+  - id: Test
+    name: node:24-bookworm-slim
+    dir: enterprise-server
+    entrypoint: sh
+    args:
+      - -c
+      - npm ci --ignore-scripts && npm test
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    args: [build, -t, '${_IMAGE}', -f, Dockerfile, .]
+images:
+  - '${_IMAGE}'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 600s

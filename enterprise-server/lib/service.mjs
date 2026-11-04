@@ -1,5 +1,6 @@
 import { id, now, hash, text, fail, publicEmployee } from "./security.mjs";
 import { parseNodes, fetchSubscription } from "./subscriptions.mjs";
+import { poolNodes, validateSelections } from "./resource-selection.mjs";
 
 export class ControlService {
   constructor(db, vault, config, fetcher = fetchSubscription) {
@@ -53,15 +54,16 @@ export class ControlService {
     const publicResources = resources.map(({ encrypted, ...r }) => ({
       ...r,
       nodes: r.nodeCount,
+      nodeDetails: this.vault.open(encrypted).nodes.map(
+        ({ id, name, protocol, server, port }) => ({ id, name, protocol, server, port }),
+      ),
       updated: r.updatedAt || "尚未同步",
     }));
     return {
       resources: publicResources,
       pools: pools.map((p) => ({
         ...p,
-        count: resources
-          .filter((r) => p.sourceIds.includes(r.id))
-          .reduce((n, r) => n + r.nodeCount, 0),
+        count: new Set(poolNodes(p, resources, this.vault).map((n) => n.id)).size,
         members: employees.filter((e) => e.poolIds.includes(p.id)).length,
       })),
       employees: employees.map((e) => ({
@@ -166,11 +168,14 @@ export class ControlService {
         : [];
       if (sourceIds.some((x) => !resources.some((r) => r.id === x)))
         fail("资源来源不存在");
+      const nodeSelections = body.nodeSelections === undefined ? undefined
+        : validateSelections(body.nodeSelections, resources, this.vault);
       const p = {
         id: poolId || id(),
         name: text(body.name, "资源池名称", 100),
         desc: String(body.desc || "").slice(0, 300),
-        sourceIds,
+        sourceIds: nodeSelections ? nodeSelections.map((s) => s.resourceId) : sourceIds,
+        ...(nodeSelections ? { nodeSelections } : {}),
       };
       if (poolId && !(await t.get("pools", poolId))) fail("资源池不存在", 404);
       await t.put("pools", p.id, p);
@@ -231,6 +236,40 @@ export class ControlService {
         actor,
       );
       return publicEmployee(e);
+    });
+  }
+  async batchEmployees(body, actor) {
+    if (!Array.isArray(body.employeeIds) || !body.employeeIds.length || body.employeeIds.length > 5000)
+      fail("请选择 1 至 5000 位员工");
+    const ids = [...new Set(body.employeeIds)];
+    const access = body.access ?? "keep", mode = body.poolMode ?? "add";
+    if (!["keep", "enable", "disable"].includes(access) || !["add", "remove", "replace"].includes(mode))
+      fail("批量操作无效");
+    if (!Array.isArray(body.poolIds)) fail("资源池选择格式无效");
+    const poolIds = [...new Set(body.poolIds)];
+    if (access === "keep" && mode !== "replace" && !poolIds.length) fail("请选择授权或资源变更");
+    return this.db.tx(async (t) => {
+      const employees = await t.list("employees"), pools = await t.list("pools");
+      if (poolIds.some((x) => !pools.some((p) => p.id === x))) fail("资源池不存在");
+      const selected = ids.map((id) => employees.find((e) => e.id === id));
+      if (selected.some((e) => !e)) fail("部分员工不存在，请刷新后重试", 409);
+      if (access === "enable" && selected.some((e) => e.directoryState && e.directoryState !== "active"))
+        fail("所选员工中包含已离职、冻结或不在同步范围内的成员，不能启用", 409);
+      for (const e of selected) {
+        const assigned = mode === "replace" ? poolIds : mode === "remove"
+          ? e.poolIds.filter((id) => !poolIds.includes(id)) : [...new Set([...e.poolIds, ...poolIds])];
+        await t.put("employees", e.id, { ...e, poolIds: assigned,
+          enabled: access === "keep" ? e.enabled : access === "enable" });
+      }
+      if (access === "disable") {
+        for (const d of await t.list("devices"))
+          if (ids.includes(d.employeeId) && !d.revokedAt)
+            await t.put("devices", d.id, { ...d, revokedAt: now() });
+        for (const s of await t.list("sessions"))
+          if (ids.includes(s.employeeId)) await t.del("sessions", s.id);
+      }
+      await this.audit(t, "批量员工授权", JSON.stringify({ employeeIds: ids, access, poolMode: mode, poolIds }), actor);
+      return { updated: selected.length };
     });
   }
   async addGateway(body, actor) {
@@ -365,13 +404,7 @@ export class ControlService {
         const resources = await t.list("resources");
         snapshot = (await t.list("pools")).map((p) => ({
           ...p,
-          nodes: resources
-            .filter((r) => p.sourceIds.includes(r.id))
-            .flatMap((r) =>
-              this.vault
-                .open(r.encrypted)
-                .nodes.map((n) => ({ ...n, resourceId: r.id })),
-            ),
+          nodes: poolNodes(p, resources, this.vault),
         }));
       }
       const revision =

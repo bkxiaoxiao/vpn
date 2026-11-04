@@ -90,6 +90,7 @@ export function publicEmployee(e) {
     createdAt,
     directoryState,
     directorySyncedAt,
+    departmentIds,
   } = e;
   return {
     id,
@@ -101,5 +102,6 @@ export function publicEmployee(e) {
     createdAt,
     directoryState,
     directorySyncedAt,
+    departmentIds,
   };
 }

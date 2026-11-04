@@ -264,7 +264,7 @@ function pools() {
     heading(
       "RESOURCE POOLS",
       "资源池",
-      "选择资源来源，再把资源池分配给员工。",
+      "按节点组合资源池，再按员工或部门分配。",
       button("创建资源池", "new-pool", "plus", true),
     ) +
     `<div class="pool-cards">${state.pools.map((p) => `<article class="panel pool-card"><div class="pool-card-head"><span class="pool-square">◎</span>${badge(p.sourceIds.length + " 个来源", "neutral")}</div><h2>${esc(p.name)}</h2><p>${esc(p.desc) || "未填写用途说明"}</p><div class="pool-meta"><span><b>${p.count}</b><small>当前节点</small></span><span><b>${p.members}</b><small>已授权员工</small></span></div><button class="btn" data-pool="${p.id}">管理资源池 ${icon("arrow")}</button></article>`).join("")}</div>${!state.pools.length ? `<section class="panel">${empty("尚未创建资源池", "new-pool", "创建第一个资源池")}</section>` : ""}`
@@ -907,7 +907,7 @@ async function init() {
     actions.retry = init;
   }
 }
-init();
+// management.js installs the resource and employee views before initialization.
 
 function feishu() {
   const f = state.feishu || { rootIds: ["0"], adminIds: [], departments: [] },

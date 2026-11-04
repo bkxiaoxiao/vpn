@@ -47,7 +47,7 @@ export async function createControlServer(config, options = {}) {
       }
       if (
         m === "GET" &&
-        ["/", "/index.html", "/app.js", "/style.css", "/favicon.svg"].includes(
+        ["/", "/index.html", "/app.js", "/management.js", "/style.css", "/favicon.svg"].includes(
           p,
         )
       ) {
@@ -301,6 +301,8 @@ export async function createControlServer(config, options = {}) {
           201,
           await service.employee(await readJson(req), null, actor),
         );
+      if (m === "POST" && p === "/api/employees/batch")
+        return json(res, 200, await service.batchEmployees(await readJson(req), actor));
       if (m === "PUT" && (match = p.match(/^\/api\/employees\/([^/]+)$/)))
         return json(
           res,

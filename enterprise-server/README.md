@@ -20,8 +20,8 @@ npm run dev
 ## 使用步骤
 
 1. 导入 HTTPS 订阅或粘贴 Clash / sing-box / 节点链接。服务端加密保存地址和节点凭证，列表不返回它们。
-2. 创建资源池，选择资源来源。
-3. 按企业飞书应用的 `open_id` 添加员工并分配资源池。相同企业、相同名字不等于相同身份。
+2. 在“订阅与节点”展开节点明细，查看名称、协议、服务器、端口和所属资源池。在资源池中按节点勾选，可跨多个订阅组合。
+3. 员工页可按部门（含下级部门）筛选并全选，也可跨筛选多选员工，再批量授权、停用、追加/移除/替换资源池。相同企业、相同名字不等于相同身份。
 4. 发布版本，保存当时的节点快照；回滚会生成更高版本。
 5. 为员工注册设备，或让已登录员工调用设备注册 API。设备令牌只显示一次。
 6. 四个平台客户端使用设备令牌拉取配置，再上报下载、校验和运行生效阶段。
@@ -110,6 +110,7 @@ https://你的控制服务/auth/feishu/callback
 | `POST /api/resources` | 导入 URL 或配置内容 |
 | `POST /api/resources/refresh` | 刷新全部订阅，失败保留已有配置 |
 | `POST /api/pools`, `PUT /api/pools/:id` | 资源池管理 |
+| `POST /api/employees/batch` | 管理员批量授权和资源池分配；明确员工 ID 清单，原子提交 |
 | `POST /api/employees`, `PUT /api/employees/:id` | 员工授权与停用 |
 | `POST /api/employees/:id/devices` | 管理员代注册设备 |
 | `DELETE /api/devices/:id` | 撤销设备与令牌 |
@@ -212,6 +213,10 @@ App Secret 使用 DATA_KEY 对称加密后保存到数据库，不回显、不�
 
 该同步是管理员手动触发，不是实时事件订阅。单次最多 500 个部门、10000 位员工，拉取截止时间约 2 分钟；规模较大时应缩小根部门范围。真实企业凭证尚未配置时不能声称已完成真实通讯录联调。
 
-新增管理员接口：GET/PUT /api/feishu/config、POST /api/feishu/check、POST /api/feishu/sync。GET 和 bootstrap 只返回脱敏配置与状态。当前共 33 项测试通过，覆盖 Windows/macOS 桌面设备身份、配置加密、动态生效、分页去重、空末页省略 items 的兼容、授权保留、离职和可见范围撤权、失败原子性及管理员隔离。缺失分页结束标记或返回错误类型的 items 时仍中止整批同步。
+新增管理员接口：GET/PUT /api/feishu/config、POST /api/feishu/check、POST /api/feishu/sync。GET 和 bootstrap 只返回脱敏配置与状态。当前共 39 项测试通过，覆盖 Windows/macOS 桌面设备身份、配置加密、动态生效、分页去重、空末页省略 items 的兼容、授权保留、离职和可见范围撤权、失败原子性及管理员隔离。缺失分页结束标记或返回错误类型的 items 时仍中止整批同步。
 
 Windows 桌面登录在 start 请求中传入 platform=Windows；旧客户端未传时兼容为 macOS。平台只作为设备元数据，不能改变飞书认证、员工授权、PKCE 或一次性票据要求。
+
+资源池支持 `nodeSelections: [{resourceId, nodeIds: [...]}]`，只发布勾选的节点。旧的 `sourceIds` 资源池保留整订阅行为；首次在新界面保存后转为明确选择，后续订阅新增节点不会自动授权。节点删除或凭证改变导致节点 ID 变化时，旧选择不会自动替换成其他节点；在资源池中重新勾选并发布。bootstrap 的 `nodeDetails` 仅包含 ID、名称、协议、服务器和端口，不含密钥或原订阅链接。
+
+批量接口请求字段为 `employeeIds`、`access: keep|enable|disable`、`poolMode: add|remove|replace`、`poolIds`。默认追加、保留原授权状态；替换可明确清空。失效员工/资源池或启用离职成员会整批拒绝。停用会撤销所选成员的会话和设备，审计记录保存精确目标与操作。按部门选择是本次成员快照，不是未来新成员自动授权规则。节点选择保存后需发布配置；批量分配已有的已发布资源池可在客户端下次同步生效。

@@ -188,6 +188,7 @@ export async function createControlServer(config, options = {}) {
           name: actor,
           local: !!session.local,
           employeeId: session.employeeId,
+          feishuOpenId: session.feishuOpenId,
         });
       if (m === "POST" && p === "/api/auth/logout") {
         if (auth.cookie(req))
@@ -261,7 +262,9 @@ export async function createControlServer(config, options = {}) {
       if (m === "GET" && p === "/api/feishu/config")
         return json(res, 200, await directory.status());
       if (m === "PUT" && p === "/api/feishu/config")
-        return json(res, 200, await directory.save(await readJson(req), actor));
+        return json(res, 200, await directory.save(await readJson(req), actor, session));
+      if (m === "POST" && p === "/api/feishu/admins")
+        return json(res, 200, await directory.changeAdministrator(await readJson(req), actor, session));
       if (m === "POST" && p === "/api/feishu/check")
         return json(res, 200, await directory.check());
       if (m === "POST" && p === "/api/feishu/sync")

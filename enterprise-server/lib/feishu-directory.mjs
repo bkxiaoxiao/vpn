@@ -33,6 +33,7 @@ export class FeishuDirectory {
       appId: c.appId,
       tenantKey: c.tenantKey,
       adminIds: c.adminIds,
+      administrators: await this.administrators(c),
       rootIds: c.rootIds,
       secretConfigured: !!c.appSecret,
       configured: !!(c.appId && c.appSecret && c.tenantKey),
@@ -42,7 +43,56 @@ export class FeishuDirectory {
       departments: await this.db.list("departments"),
     };
   }
-  async save(body, actor) {
+  async administrators(c = null) {
+    c ||= await this.credentials();
+    const employees = await this.db.list("employees");
+    return c.adminIds.map((openId) => {
+      const employee = employees.find((e) => e.openId === openId);
+      return { openId, employeeId: employee?.id || null, name: employee?.name || "未同步账号",
+        dept: employee?.dept || "", directoryState: employee?.directoryState || null };
+    });
+  }
+  async validateAdministrators(t, old, adminIds, session = {}) {
+    if (!Array.isArray(adminIds) || adminIds.length > 100 || adminIds.some((x) => typeof x !== "string" || !/^ou_[A-Za-z0-9_-]+$/.test(x)))
+      fail("管理员 open_id 无效");
+    const employees = await t.list("employees");
+    for (const openId of adminIds.filter((x) => !old.adminIds.includes(x))) {
+      const e = employees.find((e) => e.openId === openId);
+      if (!e || e.directoryState !== "active")
+        fail("请选择已同步且在职的飞书账号", 409);
+    }
+    const ownId = session.feishuOpenId || employees.find((e) => e.id === session.employeeId)?.openId;
+    if (session.authMethod === "feishu" && ownId && old.adminIds.includes(ownId) && !adminIds.includes(ownId))
+      fail("不能移除当前登录账号的管理员权限，请由另一位管理员操作", 409);
+    if (old.adminIds.length && !adminIds.length) fail("至少保留一位飞书管理员", 409);
+  }
+  async changeAdministrator(body, actor, session = {}) {
+    if (!["add", "remove"].includes(body.action)) fail("管理员操作无效");
+    const openId = text(body.openId, "飞书账号", 100);
+    await this.db.tx(async (t) => {
+      const old = await this.credentials(t);
+      if (!old.appId || !old.appSecret || !old.tenantKey) fail("请先配置飞书应用", 409);
+      const adminIds = body.action === "add" ? [...new Set([...old.adminIds, openId])]
+        : old.adminIds.filter((x) => x !== openId);
+      await this.validateAdministrators(t, old, adminIds, session);
+      if (JSON.stringify(adminIds) === JSON.stringify(old.adminIds)) return;
+      const { revision, ...credentials } = old;
+      // Role membership is checked on each request; changing it does not rotate OAuth credentials.
+      await t.put("integrations", "feishu", { revision, updatedAt: now(),
+        encrypted: this.vault.seal({ ...credentials, adminIds }) });
+      const employee = (await t.list("employees")).find((e) => e.openId === openId);
+      if (body.action === "remove") {
+        for (const s of await t.list("sessions"))
+          if (s.authMethod === "feishu" && s.role === "admin" && !s.deviceId
+            && (s.feishuOpenId === openId || (employee && s.employeeId === employee.id)))
+            await t.del("sessions", s.id);
+      }
+      await this.audit(t, body.action === "add" ? "添加系统管理员" : "移除系统管理员",
+        `${employee?.name || "未同步账号"} · ${openId}`, actor);
+    });
+    return { saved: true, administrators: await this.administrators() };
+  }
+  async save(body, actor, session = {}) {
     return this.db.tx(async (t) => {
       const old = await this.credentials(t),
         appId = text(body.appId, "App ID", 100),
@@ -78,7 +128,7 @@ export class FeishuDirectory {
         fail("同步部门 ID 无效");
       const adminIds = Array.isArray(body.adminIds)
         ? [...new Set(body.adminIds)]
-        : [];
+        : old.adminIds;
       if (
         adminIds.length > 100 ||
         adminIds.some(
@@ -86,6 +136,7 @@ export class FeishuDirectory {
         )
       )
         fail("管理员 open_id 无效");
+      await this.validateAdministrators(t, old, adminIds, session);
       await t.put("integrations", "feishu", {
         revision: id(),
         updatedAt: now(),

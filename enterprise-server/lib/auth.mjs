@@ -39,20 +39,29 @@ export class Auth {
     if (!token) fail("请先登录", 401);
     const s = await this.db.get("sessions", hash(token));
     if (!s || s.expires < Date.now()) fail("会话已失效，请重新登录", 401);
+    let provider;
     if (s.authMethod === "feishu") {
-      const provider = await this.feishuConfig();
+      provider = await this.feishuConfig();
       if (provider.revision !== s.providerRevision)
         fail("飞书应用配置已变更，请重新登录", 401);
     }
     if (s.employeeId) {
       const e = await this.db.get("employees", s.employeeId);
-      if (!e?.enabled) fail("员工已停用或未授权", 403);
-      s.name = e.name;
+      const webAdmin = s.authMethod === "feishu" && s.role === "admin" && !s.deviceId;
+      if (webAdmin) {
+        const openId = s.feishuOpenId || e?.openId;
+        if (!openId || !provider.adminIds.includes(openId)) fail("后台管理员权限已移除", 403);
+        if (e?.directoryState && e.directoryState !== "active") fail("飞书成员已离职或不在同步范围内", 403);
+      } else if (!e?.enabled) fail("员工已停用或未授权", 403);
+      s.name = e?.name || s.name;
       if (s.deviceId) {
         const d = await this.db.get("devices", s.deviceId);
         if (!d || d.revokedAt) fail("设备已停用", 403);
       }
     }
+    if (!s.employeeId && s.authMethod === "feishu" && s.role === "admin"
+      && (!s.feishuOpenId || !provider.adminIds.includes(s.feishuOpenId)))
+      fail("后台管理员权限已移除，请重新登录", 403);
     return s;
   }
   async issue(data, lifetime = 8 * 3600_000) {
@@ -184,6 +193,8 @@ export class Auth {
     )
       fail("组织同步范围已变更，请管理员先同步飞书通讯录", 403);
     const admin = provider.adminIds.includes(profile.open_id);
+    if (employee?.directoryState && employee.directoryState !== "active")
+      fail("飞书成员已离职或不在同步范围内", 403);
     if (!employee?.enabled && !admin)
       fail("尚未获得管理员授权，请联系管理员添加员工", 403);
     if (transaction.desktop) {
@@ -202,6 +213,7 @@ export class Auth {
       employeeId: employee?.id,
       name: profile.name,
       authMethod: "feishu",
+      feishuOpenId: profile.open_id,
       providerRevision: provider.revision,
       feishuAt: Date.now(),
     });

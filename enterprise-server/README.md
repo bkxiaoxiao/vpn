@@ -111,6 +111,7 @@ https://你的控制服务/auth/feishu/callback
 | `POST /api/resources/refresh` | 刷新全部订阅，失败保留已有配置 |
 | `POST /api/pools`, `PUT /api/pools/:id` | 资源池管理 |
 | `POST /api/employees/batch` | 管理员批量授权和资源池分配；明确员工 ID 清单，原子提交 |
+| `POST /api/feishu/admins` | 从已同步在职飞书账号添加/移除系统管理员：`{action: add|remove, openId}` |
 | `POST /api/employees`, `PUT /api/employees/:id` | 员工授权与停用 |
 | `POST /api/employees/:id/devices` | 管理员代注册设备 |
 | `DELETE /api/devices/:id` | 撤销设备与令牌 |
@@ -213,9 +214,11 @@ App Secret 使用 DATA_KEY 对称加密后保存到数据库，不回显、不�
 
 该同步是管理员手动触发，不是实时事件订阅。单次最多 500 个部门、10000 位员工，拉取截止时间约 2 分钟；规模较大时应缩小根部门范围。真实企业凭证尚未配置时不能声称已完成真实通讯录联调。
 
-新增管理员接口：GET/PUT /api/feishu/config、POST /api/feishu/check、POST /api/feishu/sync。GET 和 bootstrap 只返回脱敏配置与状态。当前共 39 项测试通过，覆盖 Windows/macOS 桌面设备身份、配置加密、动态生效、分页去重、空末页省略 items 的兼容、授权保留、离职和可见范围撤权、失败原子性及管理员隔离。缺失分页结束标记或返回错误类型的 items 时仍中止整批同步。
+新增管理员接口：GET/PUT /api/feishu/config、POST /api/feishu/check、POST /api/feishu/sync。GET 和 bootstrap 只返回脱敏配置与状态。当前共 44 项测试通过，覆盖 Windows/macOS 桌面设备身份、配置加密、动态生效、分页去重、空末页省略 items 的兼容、授权保留、离职和可见范围撤权、失败原子性及管理员隔离。缺失分页结束标记或返回错误类型的 items 时仍中止整批同步。
 
 Windows 桌面登录在 start 请求中传入 platform=Windows；旧客户端未传时兼容为 macOS。平台只作为设备元数据，不能改变飞书认证、员工授权、PKCE 或一次性票据要求。
+
+工作空间设置的“飞书身份与组织同步 → 系统管理员”可搜索飞书账号并添加或移除后台管理员；飞书集成页提供入口，不再要求手写管理员 open_id。新增仅允许已同步且在职的账号。后台管理权限独立于员工 VPN 使用授权：未获 VPN 授权的管理员可管理后台，但仍不能获取客户端配置。每个后台请求都会重新校验当前管理员名单；移除会撤销该账号的后台会话，不修改员工资源分配或客户端会话。不能移除当前飞书登录账号自身，至少保留一位飞书管理员。修改管理员名单不轮换应用凭证，不会令其他员工统一退出；添加后使用新管理员账号重新完成飞书登录。飞书应用可用范围仍由飞书后台控制。
 
 资源池支持 `nodeSelections: [{resourceId, nodeIds: [...]}]`，只发布勾选的节点。旧的 `sourceIds` 资源池保留整订阅行为；首次在新界面保存后转为明确选择，后续订阅新增节点不会自动授权。节点删除或凭证改变导致节点 ID 变化时，旧选择不会自动替换成其他节点；在资源池中重新勾选并发布。bootstrap 的 `nodeDetails` 仅包含 ID、名称、协议、服务器和端口，不含密钥或原订阅链接。
 

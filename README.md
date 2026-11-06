@@ -41,7 +41,7 @@ sh mac-client/scripts/build.sh
 
 ## 验证与部署状态
 
-企业服务 39 项测试通过，包括强制飞书来源、一次性桌面票据、Windows/macOS 设备身份、用量幂等、权限隔离与飞书空分页兼容。macOS 0.1.2 提供在线切换线路与每小时延迟检测；12 组原生检查通过。新增 [Windows x64 客户端](windows-client/README.md)，提供独立运行时、安装器、便携包和相同的飞书/线路功能。Mac 已验证真实飞书浏览器授权和原生回调，Windows 实机安装与登录、供应商线路及网关计量仍需按实际配置验收。Cloud Run 使用根目录 Dockerfile，生产环境必须通过密钥配置外部 PostgreSQL。
+企业服务 44 项测试通过，包括强制飞书来源、一次性桌面票据、Windows/macOS 设备身份、用量幂等、权限隔离与飞书空分页兼容。macOS 0.1.2 提供在线切换线路与每小时延迟检测；12 组原生检查通过。新增 [Windows x64 客户端](windows-client/README.md)，提供独立运行时、安装器、便携包和相同的飞书/线路功能。Mac 已验证真实飞书浏览器授权和原生回调，Windows 实机安装与登录、供应商线路及网关计量仍需按实际配置验收。Cloud Run 使用根目录 Dockerfile，生产环境必须通过密钥配置外部 PostgreSQL。
 
 此仓库不包含真实 `.env`、供应商订阅、数据库、证书私钥、安装包、依赖或构建缓存。请按 `.env.example` 配置，勿提交真实凭证。
 

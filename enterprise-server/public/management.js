@@ -147,4 +147,42 @@ document.addEventListener("input", (e) => {
     for (const row of document.querySelectorAll(".node-choice")) row.hidden = !row.dataset.nodeSearch.includes(term);
   } else if (e.target.id === "search") updateEmployeeSelection();
 });
+const originalSettings = settings;
+function systemAdministrators() {
+  const admins = state.feishu?.administrators || [];
+  return `<div class="system-admins"><div class="section-title"><h2>系统管理员</h2><button type="button" class="btn" data-action="add-system-admin">${icon("plus")}添加管理员</button></div>
+    <p>选择可通过飞书登录本管理后台的账号，可管理资源、员工、配置与工作空间。此权限与员工 VPN 使用授权分别管理。</p>
+    <div class="admin-list">${admins.map((a) => {
+      const self = a.openId === me.feishuOpenId || (a.employeeId && a.employeeId === me.employeeId);
+      return `<div class="admin-row"><span><strong>${esc(a.name)}</strong> ${self ? badge("当前账号", "neutral") : ""}<small>${esc(a.dept || "未同步部门")}</small><small>${esc(a.openId)}</small></span><button type="button" class="text-link" data-remove-admin="${esc(a.openId)}" ${self || admins.length <= 1 ? 'disabled title="需保留当前账号及至少一位管理员"' : ""}>移除</button></div>`;
+    }).join("") || '<p class="muted">尚未设置飞书管理员。</p>'}</div>
+    <p class="form-hint">添加后请使用对应飞书账号重新登录。移除后旧后台会话立即失效；当前账号不能移除自己，且至少保留一位管理员。账号还须在飞书应用可用范围内。</p></div>`;
+}
+settings = function () {
+  const marker = "<p>同步不会自动授权新员工。明确离职、冻结或不再可见的已同步员工会被停用。</p>";
+  return originalSettings().replace(marker, marker + systemAdministrators());
+};
+actions["add-system-admin"] = () => {
+  if (!state.feishu?.configured) return notify("请先配置飞书应用并同步员工");
+  const candidates = state.employees.filter((e) => !state.feishu.adminIds.includes(e.openId)
+    && e.directoryState === "active");
+  modal("添加系统管理员", "所选账号将有权登录并设置整个 VPN 管理后台。员工 VPN 授权保持原样。",
+    `<label class="field"><span>搜索飞书账号</span><input type="search" id="admin-account-search" placeholder="搜索姓名、部门或飞书身份"></label>
+    <div class="admin-candidates">${candidates.map((e) => `<label class="admin-choice" data-admin-search="${esc([e.name, e.dept, e.openId].join(" ").toLowerCase())}"><input type="radio" name="openId" required value="${esc(e.openId)}"><span><strong>${esc(e.name)}</strong><small>${esc(e.dept)}</small><small>${esc(e.openId)}</small></span></label>`).join("") || '<p class="muted">暂无可添加账号，请先同步飞书员工。</p>'}</div>`,
+    candidates.length ? "添加为系统管理员" : null, (d) => done("/feishu/admins", "POST", { action: "add", openId: d.get("openId") }, "系统管理员已添加，请使用对应飞书账号重新登录"));
+};
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "admin-account-search") return;
+  const term = e.target.value.trim().toLowerCase();
+  for (const row of document.querySelectorAll(".admin-choice")) row.hidden = !row.dataset.adminSearch.includes(term);
+});
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("button[data-remove-admin]");
+  if (!el || el.disabled) return;
+  const a = state.feishu.administrators.find((a) => a.openId === el.dataset.removeAdmin);
+  if (!a) return;
+  modal("移除系统管理员", `${esc(a.name)} · ${esc(a.dept)}`,
+    '<p class="guide-text">移除后该账号不能再管理后台，已有后台会话立即失效。员工 VPN 使用授权与资源池分配保持原样。</p>',
+    "确认移除管理员", () => done("/feishu/admins", "POST", { action: "remove", openId: a.openId }, "系统管理员已移除"));
+});
 init();

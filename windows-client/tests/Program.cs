@@ -92,6 +92,26 @@ static class Tests
             Ensure(core.RunId == run, "Lease refresh restarted core");
             core.Stop(); Ensure(!File.Exists(file) && core.RunId is null && core.Port == 0, "Stop left credentials/control state");
             Console.WriteLine("PASS controller authentication, HTTPS latency, selection isolation and cleanup");
+            var selfPath = Environment.ProcessPath ?? throw new Exception("Process path missing");
+            var self = new LocalApplication("Test process", OperatingSystem.IsWindows() ? selfPath.ToUpperInvariant() : selfPath);
+            var other = new LocalApplication("Other process", corePath);
+            foreach (var (mode, app, expected) in new[] { ("include", self, "route-a"), ("include", other, "direct"), ("exclude", self, "direct"), ("exclude", other, "route-a") })
+            {
+                await core.Start(policy, tags[0], CancellationToken.None, new(mode, [app]));
+                using var http = new HttpClient(new HttpClientHandler { Proxy = new WebProxy($"http://127.0.0.1:{core.Port}"), UseProxy = true }) { Timeout = TimeSpan.FromSeconds(5) };
+                var actual = await http.GetStringAsync($"http://127.0.0.1:{ports["direct"]}/check");
+                Ensure(actual == expected, $"App routing {mode}: expected {expected}, got {actual}");
+                core.Stop();
+            }
+            await Fails(() => Task.FromResult(new AppRoutingSettings("include", []).Route("proxy", "direct")), "Empty inclusion accepted");
+            var saved = new AppRoutingSettings("include", [self]); saved.Save(directory);
+            Ensure(AppRoutingSettings.Load(directory, out var loadError).Applications.Single().Path == self.Path && loadError is null, "Local persistence failed");
+            File.WriteAllText(Path.Combine(directory, "app-routing.json"), "invalid");
+            _ = AppRoutingSettings.Load(directory, out var corruptError); Ensure(corruptError is not null, "Corruption silently reset proxy range");
+            var unusual = new LocalApplication("Regex", @"C:\Program Files\App (test)+[1]\App.exe");
+            Ensure(System.Text.RegularExpressions.Regex.IsMatch(unusual.Path.ToLowerInvariant(), unusual.Pattern(true)), "Windows case/regex path escape failed");
+            Ensure(!System.Text.RegularExpressions.Regex.IsMatch(unusual.Path + ".other", unusual.Pattern(true)), "Executable suffix boundary not exact");
+            Console.WriteLine("PASS actual process include/exclude, Windows case matching, path escaping and local preferences corruption guard");
         }
         finally
         {

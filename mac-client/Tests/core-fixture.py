@@ -74,5 +74,18 @@ def proxy(label, delay):
 with socket.socket() as unused:
     unused.bind(('127.0.0.1', 0))
     unavailable = unused.getsockname()[1]
-print(json.dumps({'a': proxy('route-a', .04), 'b': proxy('route-b', .08), 'unavailable': unavailable}), flush=True)
+class Direct(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+    def do_GET(self):
+        body = b'direct'
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+direct = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Direct)
+direct.daemon_threads = True
+threading.Thread(target=direct.serve_forever, daemon=True).start()
+print(json.dumps({'a': proxy('route-a', .04), 'b': proxy('route-b', .08), 'unavailable': unavailable, 'direct': direct.server_port}), flush=True)
 threading.Event().wait()

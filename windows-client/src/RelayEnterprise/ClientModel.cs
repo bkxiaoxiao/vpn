@@ -29,6 +29,9 @@ public sealed class ClientModel : INotifyPropertyChanged
     public string ServerAddress { get => address; set { address = value; Changed(); } }
     public RouteView? SelectedRoute { get => selected; set { selected = value; Changed(); } }
     public bool UseSystemProxy { get; set; } = true;
+    public AppRoutingSettings AppRouting { get; private set; } = AppRoutingSettings.Default;
+    public string? AppRoutingError { get; private set; }
+    public string AppRoutingLabel => AppRoutingError ?? AppRouting.Summary;
     public bool IsAuthenticated { get; private set; }
     public bool IsConnected { get; private set; }
     public bool Busy { get; private set; }
@@ -60,6 +63,7 @@ public sealed class ClientModel : INotifyPropertyChanged
     public ClientModel(Action<Action> dispatch)
     {
         settings = LocalStorage.Settings(); address = settings.ServerAddress;
+        AppRouting = AppRoutingSettings.Load(LocalStorage.DirectoryPath, out var routingError); AppRoutingError = routingError;
         try { System.IO.File.Delete(System.IO.Path.Combine(LocalStorage.DirectoryPath, "core-run.json")); } catch { }
         core = new(LocalStorage.DirectoryPath); proxy = new(LocalStorage.DirectoryPath);
         browser = new(uri => { try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); return true; } catch { return false; } });
@@ -139,6 +143,8 @@ public sealed class ClientModel : INotifyPropertyChanged
     public async Task Connect()
     {
         if (!CanConnect) return;
+        try { if (AppRoutingError is not null) throw new ClientFailure(AppRoutingError); AppRouting.Route("validate", "direct"); }
+        catch (Exception error) { Say(Friendly(error)); return; }
         var epoch = generation; using var cancellation = new CancellationTokenSource(); action = cancellation; Busy = true; Changed();
         try
         {
@@ -146,7 +152,7 @@ public sealed class ClientModel : INotifyPropertyChanged
             if (generation != epoch || policy is null || SelectedRoute is null) return;
             var (service, bearer) = await Authorize(cancellation.Token);
             if (generation != epoch) return;
-            Say("正在启动已授权线路…"); await core.Start(policy, SelectedRoute.Tag, cancellation.Token);
+            Say("正在启动已授权线路…"); await core.Start(policy, SelectedRoute.Tag, cancellation.Token, AppRouting);
             if (generation != epoch) { core.Stop(); return; }
             if (UseSystemProxy) proxy.Enable(core.Port);
             Watchdog.Start(core, proxy);
@@ -238,6 +244,11 @@ public sealed class ClientModel : INotifyPropertyChanged
         catch { Say("代理已停止，但系统设置尚未恢复。请点击恢复系统代理。"); }
     }
     public void Recover() { try { proxy.Restore(true); Say("已恢复之前的系统代理设置。"); } catch (Exception error) { Say(Friendly(error)); } }
+    public void SaveAppRouting(AppRoutingSettings next)
+    {
+        if (!CanEditProxy) throw new ClientFailure("请断开连接后修改应用分流。");
+        next.Save(LocalStorage.DirectoryPath); AppRouting = next; AppRoutingError = null; Say("应用分流已保存，下次连接生效。");
+    }
     bool WaitForPolicy(Exception error)
     {
         if (!IsAuthenticated || error is not ClientFailure { PolicyUnavailable: true }) return false;

@@ -1,7 +1,7 @@
 import Foundation
 
 @main struct CoreRoutingTests {
-    struct Fixture: Decodable { let a: Int; let b: Int; let unavailable: Int }
+    struct Fixture: Decodable { let a: Int; let b: Int; let unavailable: Int; let direct: Int }
     @MainActor static func policy(_ ports: [String: Int], expires: Date = Date().addingTimeInterval(300)) throws -> Policy {
         let tags = ["测试 / A ?#%", "测试 B", "不可达"]
         let outbounds = zip(tags, [ports["a"]!, ports["b"]!, ports["unavailable"]!]).map { tag, port -> [String: Any] in
@@ -9,9 +9,9 @@ import Foundation
         }
         return try Policy(data: JSONSerialization.data(withJSONObject: ["authentication": "feishu", "revision": 1, "expiresAt": ISO8601DateFormatter().string(from: expires), "config": ["outbounds": outbounds]]))
     }
-    static func traffic(_ port: Int) throws -> String {
+    static func traffic(_ port: Int, target: String = "http://relay.test.invalid/check") throws -> String {
         let curl = Process(); curl.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-        curl.arguments = ["--silent", "--show-error", "--noproxy", "", "--proxy", "http://127.0.0.1:\(port)", "--max-time", "5", "http://relay.test.invalid/check"]
+        curl.arguments = ["--silent", "--show-error", "--noproxy", "", "--proxy", "http://127.0.0.1:\(port)", "--max-time", "5", target]
         let output = Pipe(); curl.standardOutput = output; curl.standardError = FileHandle.nullDevice
         try curl.run(); let body = output.fileHandleForReading.readDataToEndOfFile(); curl.waitUntilExit()
         guard curl.terminationStatus == 0 else { throw RelayFailure("Local proxy fixture request failed") }
@@ -83,5 +83,21 @@ import Foundation
         engine.stop(); assert(!engine.running && engine.port == 0 && engine.runId == nil)
         assert(!FileManager.default.fileExists(atPath: file.path))
         print("PASS renewed authorization preserves core; stopping removes control state and credentials")
+        let bundle = LocalApplication(name: "Example", path: "/Applications/Example (Test).app", bundle: true)
+        let regex = try NSRegularExpression(pattern: bundle.pattern)
+        let inside = "/Applications/Example (Test).app/Contents/Frameworks/Helper.app/Contents/MacOS/Helper"
+        let outside = "/Applications/Example (Test).app.evil/Contents/MacOS/Helper"
+        assert(regex.firstMatch(in: inside, range: NSRange(inside.startIndex..., in: inside)) != nil)
+        assert(regex.firstMatch(in: outside, range: NSRange(outside.startIndex..., in: outside)) == nil)
+        do { _ = try AppRoutingSettings(mode: .include).route(selector: "proxy", direct: "direct"); fatalError("Empty inclusion accepted") } catch {}
+        let curl = LocalApplication(name: "curl", path: "/usr/bin/curl", bundle: false)
+        let other = LocalApplication(name: "other", path: "/usr/bin/false", bundle: false)
+        for (mode, app, expected) in [(AppRoutingMode.include, curl, "route-a"), (.include, other, "direct"), (.exclude, curl, "direct"), (.exclude, other, "route-a"), (.include, bundle, "direct")] {
+            try await engine.start(policy: authorized, route: authorized.routes[0], appRouting: AppRoutingSettings(mode: mode, applications: [app]))
+            let actual = try traffic(engine.port, target: "http://127.0.0.1:\(settings.direct)/check")
+            guard actual == expected else { throw RelayFailure("Application routing \(mode): expected \(expected), received \(actual)") }
+            engine.stop()
+        }
+        print("PASS actual process inclusion/exclusion, exact bundle helper boundaries and empty-inclusion guard")
     }
 }

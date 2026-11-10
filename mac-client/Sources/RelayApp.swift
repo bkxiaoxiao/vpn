@@ -24,6 +24,7 @@ import AppKit
 private let forest=Color(red:0.13,green:0.43,blue:0.32)
 struct MainView:View {
     @ObservedObject var model:AppModel
+    @State private var showAppRouting = false
     var body:some View {
         HStack(spacing:0){
             VStack(alignment:.leading,spacing:28){
@@ -35,7 +36,7 @@ struct MainView:View {
                 HStack{Circle().fill(model.isAuthenticated ? forest:Color.gray.opacity(0.5)).frame(width:6,height:6);Text(model.displayName).font(.system(size:11));Spacer();if model.isAuthenticated{Button("退出"){model.logout()}.buttonStyle(.plain).foregroundStyle(.secondary).font(.system(size:10))}}.padding(.bottom,20)
             }.padding(.horizontal,20).frame(width:195).background(Color(red:0.96,green:0.98,blue:0.96))
             Rectangle().fill(Color.gray.opacity(0.12)).frame(width:1)
-            VStack(alignment:.leading,spacing:22){
+            ScrollView { VStack(alignment:.leading,spacing:22){
                 HStack{Text("WORKSPACE CONNECTION").font(.system(size:9,weight:.medium)).tracking(2).foregroundStyle(.secondary);Spacer();Label(model.isAuthenticated ? "已通过飞书认证":"飞书登录保护",systemImage:model.isAuthenticated ? "checkmark.shield":"lock.fill").font(.system(size:10)).foregroundStyle(forest)}
                 VStack(alignment:.leading,spacing:8){Text(model.isConnected ? "连接已就绪":"安全连接，从身份开始。").font(.system(size:26,weight:.semibold));Text("使用企业飞书身份，自动获取管理员分配的网络配置。").font(.system(size:11)).foregroundStyle(.secondary)}
                 VStack(alignment:.leading,spacing:12){
@@ -54,6 +55,9 @@ struct MainView:View {
                     Divider()
                     Toggle("接管当前网络的系统代理",isOn:$model.useSystemProxy).toggleStyle(.switch).font(.system(size:11)).disabled(model.busy||model.isConnected)
                     Text("仅代理遵循系统代理设置的应用，不是全设备 TUN VPN。接管时 macOS 可能要求管理员授权。").font(.system(size:9)).foregroundStyle(.secondary).lineSpacing(3)
+                    Divider()
+                    HStack { VStack(alignment:.leading,spacing:5) { Text("应用分流").font(.system(size:11,weight:.semibold)); Text(model.appRouting.summary).font(.system(size:10)).foregroundStyle(.secondary) }; Spacer(); Button("选择本机应用…") { showAppRouting = true }.disabled(model.busy || model.isConnected) }
+                    Text(model.appRoutingError.isEmpty ? "断开连接后可修改；仅对进入本地代理的流量生效。" : model.appRoutingError).font(.system(size:9)).foregroundStyle(.secondary)
                 }.padding(18).background(.white,in:RoundedRectangle(cornerRadius:10))
                 HStack(spacing:10){
                     if !model.isAuthenticated{Button{if model.waitingForBrowser{model.reopenLogin()}else{Task{await model.login()}}}label:{Label(model.waitingForBrowser ? "重新打开飞书":model.busy ? "正在验证…":"通过飞书登录",systemImage:"person.crop.circle.badge.checkmark").frame(minWidth:135)}.buttonStyle(.borderedProminent).tint(forest).disabled(model.busy && !model.waitingForBrowser).accessibilityIdentifier("feishu-login")}
@@ -67,8 +71,8 @@ struct MainView:View {
                 if model.needsRecovery{Button("恢复网络代理"){model.recover()}.buttonStyle(.bordered).tint(.orange)}
                 if model.isConnected{Text("本地代理 127.0.0.1:\(model.localPort) · 每 30 秒校验授权").font(.system(size:9,design:.monospaced)).foregroundStyle(.secondary)}
                 Spacer(minLength:0)
-            }.padding(30).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading).background(Color(red:0.975,green:0.981,blue:0.975))
-        }.foregroundStyle(Color(red:0.11,green:0.19,blue:0.15))
+            }.padding(30).frame(maxWidth:.infinity,alignment:.topLeading) }.frame(maxWidth:.infinity,maxHeight:.infinity).background(Color(red:0.975,green:0.981,blue:0.975))
+        }.foregroundStyle(Color(red:0.11,green:0.19,blue:0.15)).sheet(isPresented:$showAppRouting) { AppRoutingView(model:model) }
     }
     private func routeName(_ route:String)->String {route.components(separatedBy:" · ").first ?? route}
     private func step(_ number:String,_ title:String,done:Bool)->some View{HStack(spacing:7){Text(done ? "✓":number).font(.system(size:10,weight:.semibold)).frame(width:23,height:23).background(done ? forest.opacity(0.13):Color.gray.opacity(0.08),in:Circle()).foregroundStyle(done ? forest:.secondary);Text(title).font(.system(size:10)).foregroundStyle(done ? forest:.secondary)}.frame(maxWidth:.infinity)}

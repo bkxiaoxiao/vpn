@@ -1,11 +1,15 @@
 # Relay 企业连接 · Windows x64
 
-Windows 10 / 11 x64 原生 WPF 客户端，功能与 macOS 0.1.2 对齐。自带 .NET 10 桌面运行时和官方 sing-box 1.13.21，无需员工另外安装 .NET。
+0.1.3 新增应用分流：从开始菜单和注册表发现本机桌面应用，可搜索或浏览补充 .exe，选择全部、仅所选、排除所选。规则按可执行文件完整路径匹配，不区分大小写；独立辅助进程需要另外选择。断开后修改，下次连接生效。列表仅存于本机 `%LOCALAPPDATA%\RelayEnterprise\app-routing.json`，不上传后台，损坏时阻止连接直到重新保存。
+
+只处理进入本地代理的连接，不强制接管忽略系统代理、QUIC/UDP 等直接联网流量。分流模式中无法识别进程的连接默认直连；不是网络隔离策略。目录不是完整的 Microsoft Store/UWP 清单。Windows CI 以实际测试进程发送请求，验证仅所选/排除所选的命中与未命中，另验证路径大小写、正则边界、持久化与损坏设置；不修改 runner 系统代理。
+
+Windows 10 / 11 x64 原生 WPF 客户端，功能与 macOS 0.1.3 对齐。自带 .NET 10 桌面运行时和官方 sing-box 1.13.21，无需员工另外安装 .NET。
 
 产物在 `dist/`：
 
-- `Relay-Enterprise-0.1.2-Windows-x64-Setup.exe`：按当前用户安装的 NSIS 安装程序。
-- `Relay-Enterprise-0.1.2-Windows-x64-Portable.zip`：完整解压后运行 `RelayEnterprise.exe`。
+- `Relay-Enterprise-0.1.3-Windows-x64-Setup.exe`：按当前用户安装的 NSIS 安装程序。
+- `Relay-Enterprise-0.1.3-Windows-x64-Portable.zip`：完整解压后运行 `RelayEnterprise.exe`。
 - `SHA256SUMS.txt`：两个分发文件的 SHA-256。
 
 默认服务为 `https://vpn-243359801139.asia-east1.run.app`。先完成飞书登录，再按后台分配的资源池同步已发布配置。安装包不含生产飞书凭证、订阅或节点密钥。当前飞书应用的实际可用范围由飞书后台决定。

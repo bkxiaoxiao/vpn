@@ -18,11 +18,11 @@ InstallDir "$LOCALAPPDATA\Programs\Relay Enterprise"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 ManifestDPIAware true
-BrandingText "Relay Enterprise 0.1.2"
-VIProductVersion "0.1.2.0"
+BrandingText "Relay Enterprise 0.1.3"
+VIProductVersion "0.1.3.0"
 VIAddVersionKey /LANG=2052 "ProductName" "Relay 企业连接"
 VIAddVersionKey /LANG=2052 "FileDescription" "Relay Enterprise Windows 安装程序"
-VIAddVersionKey /LANG=2052 "FileVersion" "0.1.2"
+VIAddVersionKey /LANG=2052 "FileVersion" "0.1.3"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "Relay Enterprise contributors"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\RelayEnterprise.exe"
@@ -61,7 +61,7 @@ Section "Relay 企业连接"
  CreateDirectory "$SMPROGRAMS\Relay Enterprise"
  CreateShortcut "$SMPROGRAMS\Relay Enterprise\Relay 企业连接.lnk" "$INSTDIR\RelayEnterprise.exe"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RelayEnterprise" "DisplayName" "Relay 企业连接"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RelayEnterprise" "DisplayVersion" "0.1.2"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RelayEnterprise" "DisplayVersion" "0.1.3"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RelayEnterprise" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RelayEnterprise" "InstallLocation" "$INSTDIR"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RelayEnterprise" "DisplayIcon" "$INSTDIR\RelayEnterprise.exe"

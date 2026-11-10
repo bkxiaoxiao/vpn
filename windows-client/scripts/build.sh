@@ -19,15 +19,15 @@ cp Resources/THIRD_PARTY_NOTICES.txt dist/app/RELAY_THIRD_PARTY_NOTICES.txt
 cp Resources/安装与测试.txt dist/app/安装与测试.txt
 if [ -d "$root/.tools/nsis/makensis/3.13/share/nsis" ]; then export NSISDIR="$root/.tools/nsis/makensis/3.13/share/nsis"; fi
 python3 scripts/make-uninstall-manifest.py "$root/dist/app" "$root/dist/uninstall-files.nsh"
-"$nsis_cmd" -INPUTCHARSET UTF8 -DAPP_DIR="$root/dist/app" -DUNINSTALL_MANIFEST="$root/dist/uninstall-files.nsh" -DOUT_FILE="$root/dist/Relay-Enterprise-0.1.2-Windows-x64-Setup.exe" installer/Relay.nsi
+"$nsis_cmd" -INPUTCHARSET UTF8 -DAPP_DIR="$root/dist/app" -DUNINSTALL_MANIFEST="$root/dist/uninstall-files.nsh" -DOUT_FILE="$root/dist/Relay-Enterprise-0.1.3-Windows-x64-Setup.exe" installer/Relay.nsi
 python3 - <<'PY'
 import hashlib, pathlib, zipfile
 root = pathlib.Path('dist')
-archive = root / 'Relay-Enterprise-0.1.2-Windows-x64-Portable.zip'
+archive = root / 'Relay-Enterprise-0.1.3-Windows-x64-Portable.zip'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as package:
     for path in sorted((root/'app').rglob('*')):
         if path.is_file(): package.write(path, path.relative_to(root/'app'))
-outputs = [root/'Relay-Enterprise-0.1.2-Windows-x64-Setup.exe', archive]
+outputs = [root/'Relay-Enterprise-0.1.3-Windows-x64-Setup.exe', archive]
 (root/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in outputs))
 print({p.name: p.stat().st_size for p in outputs})
 PY

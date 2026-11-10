@@ -26,7 +26,7 @@ public sealed class CoreEngine(string directory, string? corePath = null) : IDis
         var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return port;
     }
-    public async Task Start(Policy policy, string selected, CancellationToken cancellation)
+    public async Task Start(Policy policy, string selected, CancellationToken cancellation, AppRoutingSettings? appRouting = null)
     {
         Stop();
         var epoch = lifecycle;
@@ -39,12 +39,14 @@ public sealed class CoreEngine(string directory, string? corePath = null) : IDis
         var controller = new CoreController(controlPort, secret, selector);
         var outbounds = (JsonArray)policy.Outbounds.DeepClone();
         outbounds.Add(new JsonObject { ["type"] = "selector", ["tag"] = selector, ["outbounds"] = new JsonArray(policy.Routes.Select(r => JsonValue.Create(r)).ToArray()), ["default"] = selected, ["interrupt_exist_connections"] = true });
+        var direct = "relay-direct-" + Guid.NewGuid().ToString("N");
+        outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = direct });
         var config = new JsonObject
         {
             ["log"] = new JsonObject { ["disabled"] = true },
             ["inbounds"] = new JsonArray(new JsonObject { ["type"] = "mixed", ["tag"] = "relay-local", ["listen"] = "127.0.0.1", ["listen_port"] = Port }),
             ["outbounds"] = outbounds,
-            ["route"] = new JsonObject { ["final"] = selector },
+            ["route"] = (appRouting ?? AppRoutingSettings.Default).Route(selector, direct),
             ["experimental"] = new JsonObject { ["clash_api"] = new JsonObject { ["external_controller"] = $"127.0.0.1:{controlPort}", ["secret"] = secret, ["access_control_allow_origin"] = new JsonArray("http://127.0.0.1"), ["access_control_allow_private_network"] = false } }
         };
         LocalStorage.WriteAtomic(file, config.ToJsonString());

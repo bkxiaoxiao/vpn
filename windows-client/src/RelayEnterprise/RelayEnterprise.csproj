@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>RelayEnterprise</AssemblyName>
     <RootNamespace>RelayEnterprise</RootNamespace>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <Company>Relay Enterprise</Company>
     <Product>Relay 企业连接</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>

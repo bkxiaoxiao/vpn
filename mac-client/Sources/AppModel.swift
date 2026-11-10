@@ -7,6 +7,8 @@ import Combine
 @MainActor final class AppModel:NSObject,ObservableObject {
     @Published var serverAddress:String = UserDefaults.standard.string(forKey:"RelayServerAddress") ?? "https://vpn-243359801139.asia-east1.run.app"
     @Published var useSystemProxy=true
+    @Published private(set) var appRouting = AppRoutingSettings()
+    @Published private(set) var appRoutingError = ""
     @Published var isAuthenticated=false
     @Published var isConnected=false
     @Published var busy=false
@@ -41,6 +43,7 @@ import Combine
         let identifier=UserDefaults.standard.string(forKey:"RelayInstallationId") ?? UUID().uuidString
         self.installationId=identifier;UserDefaults.standard.set(identifier,forKey:"RelayInstallationId")
         super.init();needsRecovery=proxy.needsRecovery
+        do { appRouting = try AppRoutingSettings.load() } catch { appRoutingError = "无法读取应用分流设置，请重新选择并保存后连接。" }
         if needsRecovery {message="发现上次的代理恢复记录，请先恢复网络代理，再登录连接。"}
         engine.onExit={ [weak self] in guard let self,self.isConnected else{return};self.forceLock("代理核心已停止，请重新登录后连接。") }
     }
@@ -98,12 +101,15 @@ import Combine
         if generation==epoch {message=isConnected ? "连接正常，飞书授权已校验。":"配置 v\(next.revision) 已同步。连接前会再次校验飞书授权。"}
     }
     func connect() async {
+        do { guard appRoutingError.isEmpty else { throw RelayFailure(appRoutingError) }; _ = try appRouting.route(selector: "validate", direct: "direct") }
+        catch { message = friendly(error); return }
         guard isAuthenticated,!busy,!isConnected else{return};let epoch=generation;busy=true;defer{if generation==epoch{busy=false}}
         do {
             guard !proxy.needsRecovery else {throw RelayFailure("请先恢复上次的网络代理设置")}
             try await synchronize(epoch:epoch);guard generation==epoch,let policy else{return}
             let (service,bearer)=try await authorize();guard generation==epoch else{return}
-            message="正在启动已授权线路…";try await engine.start(policy:policy,route:selectedRoute)
+            guard appRoutingError.isEmpty else { throw RelayFailure(appRoutingError) }
+            message="正在启动已授权线路…";try await engine.start(policy:policy,route:selectedRoute,appRouting:appRouting)
             guard generation==epoch else{engine.stop();return}
             if useSystemProxy{try proxy.enable(port:engine.port)}
             guard generation==epoch else{disconnect();return}
@@ -161,6 +167,11 @@ import Combine
         do{try proxy.restore();needsRecovery=false;message="已断开，网络代理设置已恢复。"}catch{needsRecovery=proxy.needsRecovery;message="代理已停止，但系统设置尚未恢复。请点击“恢复网络代理”。"}
     }
     func recover(){do{try proxy.restore();needsRecovery=false;message="已恢复之前的系统代理设置。"}catch{needsRecovery=true;message=friendly(error)}}
+    func saveAppRouting(_ settings: AppRoutingSettings) throws {
+        guard !busy, !isConnected else { throw RelayFailure("请断开连接后修改应用分流") }
+        try settings.save(); appRouting = settings; appRoutingError = ""
+        message = "应用分流已保存，下次连接生效。"
+    }
     func logout(){
         let oldAPI=api,oldToken=token
         forceLock("已退出飞书登录。配置已清理，代理已停止。")

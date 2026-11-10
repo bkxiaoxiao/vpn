@@ -22,7 +22,7 @@ import Darwin
         let ok=withUnsafeMutablePointer(to:&addr){$0.withMemoryRebound(to:sockaddr.self,capacity:1){getsockname(fd,$0,&len)}}
         guard ok==0 else {throw RelayFailure("无法读取代理端口")};return Int(UInt16(bigEndian:addr.sin_port))
     }
-    func start(policy:Policy,route:String) async throws {
+    func start(policy:Policy,route:String,appRouting:AppRoutingSettings = AppRoutingSettings()) async throws {
         stop()
         guard policy.expires>Date(),policy.routes.contains(route),let core=coreURL,let watcher=watcherURL else {throw RelayFailure("授权配置或代理核心不可用")}
         port=try freePort()
@@ -31,7 +31,10 @@ import Darwin
         let controller=CoreController(port:controlPort,secret:UUID().uuidString+UUID().uuidString,selector:selector)
         var outbounds=policy.config["outbounds"] as! [[String:Any]]
         outbounds.append(["type":"selector","tag":selector,"outbounds":policy.routes,"default":route,"interrupt_exist_connections":true])
-        let config:[String:Any]=["log":["disabled":true],"inbounds":[["type":"mixed","tag":"relay-local","listen":"127.0.0.1","listen_port":port]],"outbounds":outbounds,"route":["final":selector],"experimental":["clash_api":["external_controller":"127.0.0.1:\(controlPort)","secret":controller.secret,"access_control_allow_origin":["http://127.0.0.1"],"access_control_allow_private_network":false]]]
+        let direct = "relay-direct-" + UUID().uuidString
+        outbounds.append(["type": "direct", "tag": direct])
+        let routing = try appRouting.route(selector: selector, direct: direct)
+        let config:[String:Any]=["log":["disabled":true],"inbounds":[["type":"mixed","tag":"relay-local","listen":"127.0.0.1","listen_port":port]],"outbounds":outbounds,"route":routing,"experimental":["clash_api":["external_controller":"127.0.0.1:\(controlPort)","secret":controller.secret,"access_control_allow_origin":["http://127.0.0.1"],"access_control_allow_private_network":false]]]
         let file=directory.appendingPathComponent("core-run.json");try JSONSerialization.data(withJSONObject:config).write(to:file,options:.atomic);try FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:file.path)
         let check=Process();check.executableURL=core;check.arguments=["check","-c",file.path];check.standardOutput=FileHandle.nullDevice;check.standardError=FileHandle.nullDevice
         try check.run();check.waitUntilExit();guard check.terminationStatus==0 else {try? FileManager.default.removeItem(at:file);throw RelayFailure("线路配置未通过核心校验，请联系管理员")}

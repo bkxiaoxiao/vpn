@@ -22,5 +22,6 @@ public partial class MainWindow : Window
     async void Connect(object sender, RoutedEventArgs e) => await Model.Connect();
     void Disconnect(object sender, RoutedEventArgs e) => Model.Disconnect();
     void Recover(object sender, RoutedEventArgs e) => Model.Recover();
+    void AppRouting(object sender, RoutedEventArgs e) { if (Model.CanEditProxy) new AppRoutingWindow(Model) { Owner = this }.ShowDialog(); }
     async void RouteChanged(object sender, SelectionChangedEventArgs e) { if (IsLoaded) await Model.ChooseRoute(); }
 }

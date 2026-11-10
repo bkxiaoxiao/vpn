@@ -22,6 +22,8 @@
     <Separator Margin="0,10,0,15" Background="#DBE4DE"/>
     <CheckBox Content="接管当前用户的系统代理" IsChecked="{Binding UseSystemProxy}" IsEnabled="{Binding CanEditProxy}" FontSize="13"/>
     <TextBlock Text="代理遵循 Windows 系统代理设置的应用；本版不提供全设备 TUN 模式。" TextWrapping="Wrap" FontSize="11" Foreground="#8C9991" Margin="0,12,0,0"/>
+    <Separator Margin="0,15,0,10"/><DockPanel><Button Content="选择本机应用…" Click="AppRouting" IsEnabled="{Binding CanEditProxy}" DockPanel.Dock="Right"/><StackPanel><TextBlock Text="应用分流" FontWeight="SemiBold"/><TextBlock Text="{Binding AppRoutingLabel}" Foreground="#8C9991" FontSize="11"/></StackPanel></DockPanel>
+    <TextBlock Text="断开连接后可修改；仅对进入本地代理的流量生效。" TextWrapping="Wrap" FontSize="11" Foreground="#8C9991"/>
    </StackPanel></Border>
    <WrapPanel Margin="0,3,0,16">
     <Button Content="{Binding LoginLabel}" Click="Login" Style="{StaticResource Primary}" IsEnabled="{Binding CanLogin}" Visibility="{Binding ShowLogin,Converter={StaticResource Visible}}" AutomationProperties.AutomationId="feishu-login"/>
@@ -33,7 +35,7 @@
    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="#73867A" FontSize="12" LineHeight="21" Margin="0,0,0,12"/>
    <TextBlock Text="{Binding PortLabel}" FontSize="11" Foreground="#8C9991"/>
    <Button Content="恢复系统代理" Click="Recover" HorizontalAlignment="Left" Margin="0,14,0,0" Visibility="{Binding ShowRecovery,Converter={StaticResource Visible}}"/>
-   <TextBlock Text="Relay Enterprise 0.1.2 · Windows x64" Foreground="#AAB4AD" FontSize="10" Margin="0,25,0,0"/>
+   <TextBlock Text="Relay Enterprise 0.1.3 · Windows x64" Foreground="#AAB4AD" FontSize="10" Margin="0,25,0,0"/>
   </StackPanel></ScrollViewer>
  </Grid>
 </Window>
